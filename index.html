@@ -1,4 +1,4 @@
-<!-- AI 시민대학 스마트에이징 위저드 전체교체본 v0.8 | 처음부터 시작하기 iframe 호환 수정 -->
+<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.9 | 자동저장+이어하기+JSON 백업 -->
 <div id="wz">
 <style>
 #wz *{box-sizing:border-box}
@@ -69,6 +69,15 @@
 #wz .persistBtns{display:flex;gap:7px;flex-wrap:wrap}
 #wz .persistBtns button{font-size:11.5px;padding:6px 10px}
 #wz .fileInput{display:none}
+#wz .resumeOverlay{position:fixed;inset:0;background:rgba(27,36,48,.45);display:none;align-items:center;justify-content:center;padding:18px;z-index:99999}
+#wz .resumeOverlay.show{display:flex}
+#wz .resumeCard{width:min(520px,100%);background:#fff;border:1px solid var(--rule);border-radius:5px;padding:20px;box-shadow:0 10px 35px rgba(0,0,0,.18)}
+#wz .resumeCard h3{font-size:16px;margin:0 0 7px}
+#wz .resumeCard p{font-size:12.5px;color:var(--ink2);margin:0 0 12px}
+#wz .resumeMeta{background:var(--accent2);border-radius:3px;padding:10px 12px;font-size:12.5px;line-height:1.6;margin-bottom:14px}
+#wz .resumeActions{display:flex;gap:8px;flex-wrap:wrap}
+#wz .resumeActions button{flex:1;min-width:130px}
+
 @media(max-width:640px){
   #wz{padding:16px 13px 24px}
   #wz .tick span{display:none}
@@ -93,14 +102,26 @@
 </div>
 
 <div class="persist">
-  <div class="persistStatus" id="persistStatus"><strong>작업 저장</strong></div>
-  <p class="persistHelp">오늘 작업을 마칠 때 <b>오늘 작업 저장하기</b>를 눌러 백업 파일을 보관하세요. 다음에 이어서 할 때는 <b>이전 작업 이어하기</b>에서 그 파일을 선택하면 저장한 단계로 돌아옵니다.</p>
+  <div class="persistStatus" id="persistStatus"><strong>자동 저장 준비 중</strong></div>
+  <p class="persistHelp">같은 기기·브라우저에서는 자동으로 저장됩니다. 다른 기기에서 이어서 하거나 비상 복구가 필요할 때는 백업 파일을 사용하세요.</p>
   <div class="persistBtns">
-    <button class="mini" id="backupSave">오늘 작업 저장하기</button>
-    <button class="mini" id="backupLoad">이전 작업 이어하기</button>
+    <button class="mini" id="backupSave">백업 파일 저장</button>
+    <button class="mini" id="backupLoad">백업 파일 불러오기</button>
     <button class="mini" id="newWork">처음부터 시작하기</button>
   </div>
   <input class="fileInput" type="file" id="backupFile" accept=".json,application/json">
+</div>
+
+<div class="resumeOverlay" id="resumeOverlay" aria-hidden="true">
+  <div class="resumeCard">
+    <h3>이전에 작성하던 작업이 있습니다</h3>
+    <p>같은 브라우저에 자동 저장된 작업을 이어서 할 수 있습니다.</p>
+    <div class="resumeMeta" id="resumeMeta"></div>
+    <div class="resumeActions">
+      <button id="resumeWork">이어서 하기</button>
+      <button class="ghost" id="resumeNew">새로 시작</button>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -110,7 +131,10 @@
 var CHATGPT_URL="https://chatgpt.com/";
 var NOTEBOOK_URL="https://notebooklm.google.com/";
 
-var WIZARD_VERSION="v0.8";
+var WIZARD_VERSION="v0.9";
+var STORAGE_KEY="ai_citizen_smart_aging_wizard_autosave_v2";
+var saveTimer=null;
+var storageAvailable=true;
 var INITIAL_STATE=null;
 var newWorkArmed=false;
 var newWorkTimer=null;
@@ -2183,8 +2207,14 @@ function render(){
 function bind(){
  var p=$("panel");
 
- p.addEventListener("input",onInput);
- p.addEventListener("change",onChange);
+ p.addEventListener("input",function(e){
+  onInput(e);
+  scheduleAutoSave();
+ });
+ p.addEventListener("change",function(e){
+  onChange(e);
+  scheduleAutoSave();
+ });
  p.addEventListener("click",onClick);
 }
 
@@ -2524,6 +2554,7 @@ function onClick(e){
   if($("sourceParseStatus"))$("sourceParseStatus").textContent="준비된 공식자료를 직접 선택했습니다.";
 
   flash(pb,"넣음");
+  scheduleAutoSave();
   return;
  }
 
@@ -2534,6 +2565,7 @@ function onClick(e){
   S.rolls++;
   $("panel").innerHTML=scr2();
   bind();
+  scheduleAutoSave();
   return;
  }
 
@@ -2864,6 +2896,7 @@ $("next").onclick=function(){
  if(step===LAST){
   step=0;
   render();
+  autoSaveNow();
   return;
  }
 
@@ -2876,6 +2909,7 @@ $("next").onclick=function(){
 
  step++;
  render();
+ autoSaveNow();
 };
 
 $("prev").onclick=function(){
@@ -2884,12 +2918,59 @@ $("prev").onclick=function(){
  if(step>0){
   step--;
   render();
+  autoSaveNow();
  }
 };
 
-/* 공식 저장 방식: JSON 백업 / 복원 */
+/* GitHub Pages 저장 방식: 자동저장 + 이어하기 + JSON 백업 */
+function storageGet(){
+ try{
+  return localStorage.getItem(STORAGE_KEY);
+ }catch(e){
+  storageAvailable=false;
+  return null;
+ }
+}
+
+function storageSet(value){
+ try{
+  localStorage.setItem(STORAGE_KEY,value);
+  storageAvailable=true;
+  return true;
+ }catch(e){
+  storageAvailable=false;
+  return false;
+ }
+}
+
+function storageRemove(){
+ try{
+  localStorage.removeItem(STORAGE_KEY);
+  return true;
+ }catch(e){
+  storageAvailable=false;
+  return false;
+ }
+}
+
 function nowIso(){
  return new Date().toISOString();
+}
+
+function formatSavedTime(iso){
+ if(!iso)return "시간 정보 없음";
+
+ try{
+  return new Intl.DateTimeFormat("ko-KR",{
+   month:"numeric",
+   day:"numeric",
+   hour:"2-digit",
+   minute:"2-digit",
+   hour12:false
+  }).format(new Date(iso));
+ }catch(e){
+  return iso;
+ }
 }
 
 function currentStepLabel(n){
@@ -2908,15 +2989,181 @@ function makeSavePayload(){
  };
 }
 
-function updatePersistStatus(msg){
+function updatePersistStatus(savedAt,msg){
  var el=$("persistStatus");
  if(!el)return;
 
  if(msg){
   el.innerHTML="<strong>"+esc(msg)+"</strong>";
- }else{
-  el.innerHTML="<strong>현재 위치: "+esc(currentStepLabel(step))+"</strong>";
+  return;
  }
+
+ if(!storageAvailable){
+  el.innerHTML="<strong>자동 저장을 사용할 수 없습니다.</strong> 백업 파일을 이용하세요.";
+  return;
+ }
+
+ if(savedAt){
+  el.innerHTML="<strong>✓ 자동 저장됨 · "+esc(formatSavedTime(savedAt))+"</strong> · 현재 위치: "+esc(currentStepLabel(step));
+ }else{
+  el.innerHTML="<strong>자동 저장 사용 중</strong> · 현재 위치: "+esc(currentStepLabel(step));
+ }
+}
+
+function autoSaveNow(){
+ if(!storageAvailable){
+  updatePersistStatus("");
+  return false;
+ }
+
+ var payload=makeSavePayload();
+ var ok=storageSet(JSON.stringify(payload));
+
+ if(ok){
+  updatePersistStatus(payload.savedAt);
+ }
+
+ return ok;
+}
+
+function scheduleAutoSave(){
+ if(saveTimer){
+  clearTimeout(saveTimer);
+ }
+
+ saveTimer=setTimeout(function(){
+  saveTimer=null;
+  autoSaveNow();
+ },300);
+}
+
+function readSavedPayload(){
+ var raw=storageGet();
+ if(!raw)return null;
+
+ try{
+  var p=JSON.parse(raw);
+
+  if(p && p.state && typeof p.state==="object"){
+   return p;
+  }
+ }catch(e){}
+
+ return null;
+}
+
+function applySavedPayload(payload){
+ if(!payload || !payload.state){
+  return false;
+ }
+
+ S=JSON.parse(JSON.stringify(INITIAL_STATE));
+ normalize(payload.state);
+
+ var savedStep=parseInt(payload.currentStep,10);
+ step=isNaN(savedStep) ? 0 : Math.max(0,Math.min(LAST,savedStep));
+
+ render();
+ autoSaveNow();
+ return true;
+}
+
+function showResumePrompt(payload){
+ var overlay=$("resumeOverlay");
+ var meta=$("resumeMeta");
+
+ if(!overlay || !meta){
+  applySavedPayload(payload);
+  return;
+ }
+
+ var title=(payload.topic || (payload.state && payload.state.topic) || "주제 미확정");
+ var savedStep=parseInt(payload.currentStep,10);
+ if(isNaN(savedStep))savedStep=0;
+
+ meta.innerHTML=
+  "<b>주제</b> "+esc(title)+"<br>"+
+  "<b>마지막 작업</b> "+esc(currentStepLabel(savedStep))+"<br>"+
+  "<b>마지막 저장</b> "+esc(formatSavedTime(payload.savedAt));
+
+ overlay.classList.add("show");
+ overlay.setAttribute("aria-hidden","false");
+
+ $("resumeWork").onclick=function(){
+  overlay.classList.remove("show");
+  overlay.setAttribute("aria-hidden","true");
+  applySavedPayload(payload);
+ };
+
+ $("resumeNew").onclick=function(){
+  overlay.classList.remove("show");
+  overlay.setAttribute("aria-hidden","true");
+  clearAndStartFresh();
+ };
+}
+
+function clearAndStartFresh(){
+ if(saveTimer){
+  clearTimeout(saveTimer);
+  saveTimer=null;
+ }
+
+ storageRemove();
+ S=JSON.parse(JSON.stringify(INITIAL_STATE));
+ step=0;
+ newWorkArmed=false;
+
+ render();
+ updatePersistStatus("", "새 작업을 시작했습니다");
+ $("err").textContent="";
+}
+
+function resetNewWorkButton(){
+ newWorkArmed=false;
+
+ if(newWorkTimer){
+  clearTimeout(newWorkTimer);
+  newWorkTimer=null;
+ }
+
+ var b=$("newWork");
+
+ if(b){
+  b.textContent="처음부터 시작하기";
+  b.classList.add("mini");
+ }
+}
+
+function startNewWork(){
+ var b=$("newWork");
+
+ if(!newWorkArmed){
+  newWorkArmed=true;
+
+  if(b){
+   b.textContent="정말 처음부터 시작";
+  }
+
+  updatePersistStatus("", "한 번 더 누르면 자동 저장된 현재 작업을 지우고 처음부터 시작합니다");
+
+  if(newWorkTimer){
+   clearTimeout(newWorkTimer);
+  }
+
+  newWorkTimer=setTimeout(function(){
+   resetNewWorkButton();
+   updatePersistStatus("");
+  },6000);
+
+  return;
+ }
+
+ if(newWorkTimer){
+  clearTimeout(newWorkTimer);
+  newWorkTimer=null;
+ }
+
+ clearAndStartFresh();
 }
 
 function safeFilePart(s){
@@ -2954,23 +3201,8 @@ function downloadBackup(){
   URL.revokeObjectURL(url);
  },1000);
 
- updatePersistStatus("작업 백업 파일을 저장했습니다 · "+currentStepLabel(step));
-}
-
-function applySavedPayload(payload){
- if(!payload || !payload.state){
-  return false;
- }
-
- S=JSON.parse(JSON.stringify(INITIAL_STATE));
- normalize(payload.state);
-
- var savedStep=parseInt(payload.currentStep,10);
- step=isNaN(savedStep) ? 0 : Math.max(0,Math.min(LAST,savedStep));
-
- render();
- updatePersistStatus("이전 작업을 불러왔습니다 · "+currentStepLabel(step));
- return true;
+ autoSaveNow();
+ updatePersistStatus("", "백업 파일을 저장했습니다 · "+currentStepLabel(step));
 }
 
 function loadBackupFile(file){
@@ -3007,7 +3239,7 @@ function loadBackupFile(file){
    }
 
    applySavedPayload(payload);
-   $("err").textContent="이전 작업을 불러왔습니다. 저장했던 단계에서 계속 진행하세요.";
+   $("err").textContent="백업 파일을 불러왔습니다. 저장했던 단계에서 계속 진행하세요.";
   }catch(e){
    $("err").textContent="백업 파일을 읽지 못했습니다. 이 위저드에서 저장한 JSON 파일인지 확인하세요.";
   }finally{
@@ -3021,64 +3253,6 @@ function loadBackupFile(file){
  };
 
  reader.readAsText(file,"utf-8");
-}
-
-function resetNewWorkButton(){
- newWorkArmed=false;
-
- if(newWorkTimer){
-  clearTimeout(newWorkTimer);
-  newWorkTimer=null;
- }
-
- var b=$("newWork");
-
- if(b){
-  b.textContent="처음부터 시작하기";
-  b.classList.add("mini");
- }
-}
-
-function startNewWork(){
- var b=$("newWork");
-
- if(!newWorkArmed){
-  newWorkArmed=true;
-
-  if(b){
-   b.textContent="정말 처음부터 시작";
-  }
-
-  updatePersistStatus("한 번 더 누르면 현재 작업을 지우고 처음부터 시작합니다");
-
-  if(newWorkTimer){
-   clearTimeout(newWorkTimer);
-  }
-
-  newWorkTimer=setTimeout(function(){
-   resetNewWorkButton();
-   updatePersistStatus("");
-  },6000);
-
-  return;
- }
-
- if(newWorkTimer){
-  clearTimeout(newWorkTimer);
-  newWorkTimer=null;
- }
-
- S=JSON.parse(JSON.stringify(INITIAL_STATE));
- step=0;
- newWorkArmed=false;
-
- render();
- updatePersistStatus("새 작업을 시작했습니다");
- $("err").textContent="";
-
- if($("newWork")){
-  $("newWork").textContent="처음부터 시작하기";
- }
 }
 
 function bindPersistenceControls(){
@@ -3280,8 +3454,17 @@ function normalize(o){
 
 function initPersistence(){
  bindPersistenceControls();
+
+ var saved=readSavedPayload();
+
  render();
- updatePersistStatus("");
+
+ if(saved){
+  updatePersistStatus(saved.savedAt);
+  showResumePrompt(saved);
+ }else{
+  autoSaveNow();
+ }
 }
 
 initPersistence();

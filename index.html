@@ -1,4 +1,4 @@
-<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.14 | Prompt Architecture 수렴본 -->
+<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.15 | Studio 직접 실행 구조 -->
 <div id="wz">
 <style>
 #wz *{box-sizing:border-box}
@@ -77,6 +77,12 @@
 #wz .phaseBox{margin:14px 0 10px;padding:10px 12px;background:#edf3f0;border-left:3px solid var(--accent);border-radius:3px}
 #wz .phaseBox b{display:block;font-size:13px;margin-bottom:2px}
 #wz .phaseBox span{font-size:11.8px;color:var(--ink2)}
+#wz .execSteps{margin:10px 0 14px;padding:11px 12px;border:1px solid var(--rule);background:#fbfcfd;border-radius:4px}
+#wz .execSteps b{font-size:12.8px}
+#wz .execSteps ol{margin:7px 0 0 19px;padding:0}
+#wz .execSteps li{margin:4px 0;font-size:12px;line-height:1.5}
+#wz .settingBox{white-space:pre-wrap;background:#f6f8fa;border:1px solid var(--rule);border-radius:4px;padding:9px 11px;font-size:11.8px;line-height:1.55;margin:7px 0 12px}
+
 #wz .parseOk{font-size:11.5px;color:var(--accent);margin:-5px 0 12px}
 
 
@@ -103,7 +109,7 @@
 <h1>스마트 에이징 안내자료 · AI 콘텐츠 위저드</h1>
 <p class="sub">ChatGPT로 공식자료를 찾고, 사람이 확인한 뒤, Gemini Notebook에서 6~10차시 흐름대로 검증·선별·제작·활용합니다.</p>
 
-<div class="versionTag" id="versionTag">v0.14</div>
+<div class="versionTag" id="versionTag">v0.15</div>
 <div class="rail" id="rail"></div>
 <div class="panel" id="panel"></div>
 <div class="err" id="err"></div>
@@ -143,7 +149,7 @@
 var CHATGPT_URL="https://chatgpt.com/";
 var NOTEBOOK_URL="https://notebooklm.google.com/";
 
-var WIZARD_VERSION="v0.14";
+var WIZARD_VERSION="v0.15";
 var STORAGE_KEY="ai_citizen_smart_aging_wizard_autosave_v2";
 var saveTimer=null;
 var storageAvailable=true;
@@ -1814,94 +1820,178 @@ function contentTypeText(){
  return "(미선택)";
 }
 
-function contentInstruction(){
+function lockedOriginalText(){
+ return "[잠근 원본]\n"+
+ "주제: "+S.finalTitle+"\n"+
+ "목적: "+S.finalPurpose+"\n"+
+ "대상: "+S.finalAud+"\n"+
+ "핵심정보 1: "+S.finalCore[0]+"\n"+
+ "핵심정보 2: "+S.finalCore[1]+"\n"+
+ "핵심정보 3: "+S.finalCore[2]+"\n"+
+ "행동: "+S.finalActions.filter(function(x){return x.trim()}).join(" / ")+"\n"+
+ "도움받을 곳: "+S.finalHelp+"\n"+
+ "주의: "+S.finalCaution+"\n"+
+ "한 메시지: "+S.keyMessage+"\n"+
+ "실제 볼·들을 장면: "+S.useScene+"\n"+
+ (S.length.trim() ? "희망 분량·길이: "+S.length+"\n" : "")+
+ "\n[아직 확인되지 않아 넣지 말 것]\n"+
+ "추가 확인 질문: "+(S.question.trim()?S.question:"없음");
+}
+
+function studioArtifactName(){
+ if(S.contentType==="audio")return "AI 오디오 오버뷰";
+ if(S.contentType==="video")return "AI 동영상 오버뷰";
+ if(S.contentType==="quiz")return "퀴즈";
+ if(S.contentType==="card")return "슬라이드 자료(카드뉴스형)";
+ return "Gemini Notebook 채팅";
+}
+
+function studioButtonGuide(){
+ if(S.contentType==="audio"){
+  return [
+   "Gemini Notebook의 스튜디오 패널로 이동합니다.",
+   "'AI 오디오 오버뷰'의 맞춤설정(연필 아이콘)을 엽니다.",
+   "언어·형식·길이를 선택합니다.",
+   "아래 '맞춤 프롬프트에 붙여넣을 내용'만 복사해 입력합니다.",
+   "'생성'을 눌러 실제 오디오 오버뷰를 만듭니다."
+  ];
+ }
+
+ if(S.contentType==="video"){
+  return [
+   "Gemini Notebook의 스튜디오 패널로 이동합니다.",
+   "'AI 동영상 오버뷰'를 선택하고 맞춤설정을 엽니다.",
+   "형식·언어·시각적 스타일을 선택합니다.",
+   "아래 '맞춤 프롬프트에 붙여넣을 내용'만 복사해 입력합니다.",
+   "'생성'을 눌러 실제 AI 동영상 오버뷰를 만듭니다."
+  ];
+ }
+
+ if(S.contentType==="quiz"){
+  return [
+   "Gemini Notebook의 스튜디오 패널로 이동합니다.",
+   "'퀴즈'의 맞춤설정(연필 아이콘)을 엽니다.",
+   "난이도를 선택합니다.",
+   "아래 '맞춤 프롬프트에 붙여넣을 내용'만 복사해 입력합니다.",
+   "'생성'을 눌러 실제 퀴즈를 만듭니다."
+  ];
+ }
+
+ if(S.contentType==="card"){
+  return [
+   "Gemini Notebook의 스튜디오 패널로 이동합니다.",
+   "'슬라이드 자료'의 맞춤설정(연필 아이콘)을 엽니다.",
+   "카드뉴스처럼 짧게 넘겨볼 수 있도록 짧은 슬라이드 구성을 사용합니다.",
+   "아래 '맞춤 프롬프트에 붙여넣을 내용'만 복사해 입력합니다.",
+   "'생성'을 눌러 카드뉴스형 슬라이드 자료를 만듭니다."
+  ];
+ }
+
+ return [
+  "Gemini Notebook 채팅으로 이동합니다.",
+  "아래 프롬프트를 채팅 입력창에 붙여넣습니다.",
+  "결과를 받은 뒤 원본과 비교하여 필요한 부분만 수정합니다."
+ ];
+}
+
+function studioSettingsText(){
+ if(S.contentType==="audio"){
+  return "실행 위치: 스튜디오 → AI 오디오 오버뷰 → 맞춤설정\n"+
+  "권장 언어: 한국어\n"+
+  "형식: 사용 장면에 맞게 선택\n"+
+  "길이: "+(S.length.trim()?S.length:"짧게 또는 기본")+"\n"+
+  "중요: 채팅창이 아니라 오디오 오버뷰의 맞춤 프롬프트 칸에 아래 내용을 넣습니다.";
+ }
+
+ if(S.contentType==="video"){
+  return "실행 위치: 스튜디오 → AI 동영상 오버뷰 → 맞춤설정\n"+
+  "권장 언어: 한국어\n"+
+  "형식: 설명형을 기본으로 검토\n"+
+  "시각적 스타일: 대상이 읽기 쉬운 단순한 스타일\n"+
+  (S.length.trim() ? "희망 길이: "+S.length+"\n" : "")+
+  "중요: 채팅창에 넣어 동영상 제작을 요청하지 않습니다. AI 동영상 오버뷰 맞춤설정에서 아래 내용을 넣고 '생성'을 누릅니다.";
+ }
+
+ if(S.contentType==="quiz"){
+  return "실행 위치: 스튜디오 → 퀴즈 → 맞춤설정\n"+
+  "권장 난이도: 쉬움 또는 보통\n"+
+  "문항 수 목표: 3문항 이내\n"+
+  "중요: 채팅창이 아니라 퀴즈 맞춤 프롬프트 칸에 아래 내용을 넣습니다.";
+ }
+
+ if(S.contentType==="card"){
+  return "실행 위치: 스튜디오 → 슬라이드 자료 → 맞춤설정\n"+
+  "권장 언어: 한국어\n"+
+  "권장 구성: 카드 6장 안팎의 짧은 카드뉴스형\n"+
+  "중요: Gemini Notebook에는 카드뉴스 전용 버튼이 없으므로 슬라이드 자료를 카드형 콘텐츠로 활용합니다.";
+ }
+
+ return "실행 위치: Gemini Notebook 채팅\n"+
+ "아래 프롬프트 전체를 채팅 입력창에 붙여넣습니다.";
+}
+
+function studioCustomPrompt(){
  var common=
-"공통 원칙:\n"+
-"- 아래 [잠근 원본]과 이 Gemini Notebook의 공식 출처만 사용하세요.\n"+
-"- 원본의 사실·수치·시간·위치·비용·대상·자격·기관 조건을 임의로 바꾸지 마세요.\n"+
-"- 새 건강정보·효과·통계를 추가하지 마세요.\n"+
-"- 개인 진단·치료·약 조정·특정 제품 구매 추천을 하지 마세요.\n"+
-"- 대상이 이해하기 쉬운 한국어를 사용하고 주의·조건을 생략하지 마세요.\n";
+ "아래 잠근 원본과 이 Gemini Notebook에 선택된 공식 출처 안에서만 제작하세요.\n"+
+ "원본의 사실·수치·시간·위치·비용·대상·자격·기관 조건을 바꾸지 마세요.\n"+
+ "새 건강정보·효과·통계·기관·제품을 추가하지 마세요.\n"+
+ "개인 진단·치료·약 조정·효과 보장을 하지 마세요.\n"+
+ "추가 확인 질문의 답을 추정하여 콘텐츠에 넣지 마세요.\n"+
+ "대상이 이해하기 쉬운 한국어를 사용하고 조건·주의를 생략하지 마세요.\n\n"+
+ lockedOriginalText()+"\n\n";
 
  if(S.contentType==="audio"){
   return common+
-  "\nAI 오디오:\n"+
-  "- 2분 안팎을 목표로 합니다.\n"+
-  "- 핵심 메시지를 앞부분에 둡니다.\n"+
-  "- 대상·상황 → 핵심정보 3개 → 행동 → 도움 → 주의 순으로 자연스럽게 구성하세요.\n"+
-  "- 화면을 봐야만 이해되는 표현은 피하세요.";
+  "[AI 오디오 오버뷰 집중 지시]\n"+
+  "한 메시지를 초반에 분명히 전달하세요.\n"+
+  "대상·상황 → 핵심정보 3개 → 행동 → 도움받을 곳 → 주의 순으로 자연스럽게 다루세요.\n"+
+  "화면을 봐야만 이해되는 표현은 피하세요.\n"+
+  "잠근 원본 밖의 사례나 건강효과를 덧붙이지 마세요.";
  }
 
  if(S.contentType==="video"){
   return common+
-  "\nAI 동영상:\n"+
-  "- 문제·대상 → 핵심 행동 → 도움·주의의 3장면 구조를 우선하세요.\n"+
-  "- 장면 설명과 내레이션을 함께 제안하세요.\n"+
-  "- 시각적으로 새 사실이나 효과를 과장하지 마세요.";
+  "[AI 동영상 오버뷰 집중 지시]\n"+
+  "한 메시지가 처음부터 분명히 드러나게 하세요.\n"+
+  "문제·대상 → 핵심 행동 → 도움·주의의 흐름을 우선하세요.\n"+
+  "핵심정보 3개와 행동이 시각적으로 구분되어 이해되게 구성하세요.\n"+
+  "원본에 없는 위험 장면·효과·수치·의학적 설명을 시각적으로 만들어내지 마세요.\n"+
+  "마지막에는 도움받을 곳과 주의사항이 확인되게 하세요.";
  }
 
  if(S.contentType==="quiz"){
   return common+
-  "\n퀴즈:\n"+
-  "- 3문항 이내로 만드세요.\n"+
-  "- 행동 판단 중심으로 만드세요.\n"+
-  "- 정답은 하나로 분명하게 하세요.\n"+
-  "- 각 정답 설명의 근거를 원본 또는 공식 출처에서 찾을 수 있게 하세요.\n"+
-  "- 공포·조롱 표현을 쓰지 마세요.";
+  "[퀴즈 집중 지시]\n"+
+  "3문항 이내의 행동 판단 중심 퀴즈를 만드세요.\n"+
+  "각 문항의 정답은 하나로 분명하게 하세요.\n"+
+  "정답 근거가 잠근 원본 또는 선택된 공식 출처에서 직접 확인되어야 합니다.\n"+
+  "추가 확인 질문이나 과장 카드는 정답 근거로 사용하지 마세요.";
  }
 
  if(S.contentType==="card"){
   return common+
-  "\n카드뉴스:\n"+
-  "- 한 화면에 한 메시지를 사용하세요.\n"+
-  "- 첫 화면에 대상·상황·핵심 메시지를 보여주세요.\n"+
-  "- 핵심정보 3개는 서로 분리하세요.\n"+
-  "- 후반부에 행동·도움·주의를 두세요.\n"+
-  "- 마지막에 공식 출처를 표시하세요.\n"+
-  "- 긴 문단을 피하세요.";
+  "[카드뉴스형 슬라이드 집중 지시]\n"+
+  "한 슬라이드에 한 메시지만 두고 카드 6장 안팎으로 구성하세요.\n"+
+  "첫 장에는 대상·상황·한 메시지를 보여주세요.\n"+
+  "핵심정보 3개는 서로 다른 카드에 분리하세요.\n"+
+  "후반에는 행동·도움받을 곳·주의를 배치하고 마지막 카드에는 공식 출처를 표시하세요.\n"+
+  "긴 문단보다 짧고 읽기 쉬운 문장을 사용하세요.";
  }
 
  return common+
- "\n기타 콘텐츠:\n"+
- "- 선택 형식의 장점을 살리되 핵심정보 3개·행동·도움·주의·출처를 모두 유지하세요.";
+ "[기타 콘텐츠 지시]\n"+
+ "선택한 형식의 장점을 살리되 핵심정보 3개·행동·도움·주의·출처를 빠뜨리지 마세요.";
 }
 
-function pPackage(){
-return "━━━━━━━━━━━━━━━━━━━━\n"+
-"Gemini Notebook 콘텐츠 제작 패키지\n"+
-"━━━━━━━━━━━━━━━━━━━━\n\n"+
+function executionStepsHtml(){
+ var steps=studioButtonGuide();
+ var h="<ol>";
 
-"[한-한-한-한]\n"+
-"한 원본: 8차시에서 5가지 검수를 마친 인포그래픽 또는 대체 한 장\n"+
-"한 메시지: "+S.keyMessage+"\n"+
-"한 대상: "+S.finalAud+"\n"+
-"한 콘텐츠: "+contentTypeText()+"\n"+
-"실제 볼·들을 장면: "+S.useScene+"\n"+
-"형식 선택 이유: "+autoChoiceReason()+
-(S.length.trim() ? "\n희망 분량·길이: "+S.length : "")+
-"\n\n"+
+ for(var i=0;i<steps.length;i++){
+  h+="<li>"+esc(steps[i])+"</li>";
+ }
 
-"[잠근 원본]\n"+
-"주제: "+S.finalTitle+"\n"+
-"목적: "+S.finalPurpose+"\n"+
-"핵심정보 1: "+S.finalCore[0]+"\n"+
-"핵심정보 2: "+S.finalCore[1]+"\n"+
-"핵심정보 3: "+S.finalCore[2]+"\n"+
-"행동: "+S.finalActions.filter(function(x){return x.trim()}).join(" / ")+"\n"+
-"도움받을 곳: "+S.finalHelp+"\n"+
-"주의: "+S.finalCaution+"\n"+
-"공식 출처:\n"+
-sourceList()+"\n\n"+
-
-"[아직 확인되지 않아 콘텐츠에 넣지 말 것]\n"+
-"추가 확인 질문: "+(S.question.trim()?S.question:"없음")+"\n"+
-"이 질문의 답을 추정하거나 새 사실로 채우지 마세요.\n\n"+
-
-"[제작 지침]\n"+
-contentInstruction()+"\n\n"+
-
-"위 잠근 원본을 바꾸지 말고 선택한 콘텐츠 1종만 생성하세요.\n"+
-"생성 후 검수는 위저드의 '공유 전 다섯 문'에서 사람이 직접 합니다.";
+ return h+"</ol>";
 }
 
 /* 12. 10차시 */
@@ -2405,20 +2495,30 @@ function scr10(){
 }
 
 function scr11(){
- return '<h2><i>11</i>Gemini Notebook 콘텐츠 제작 · 공유 전 다섯 문</h2>'+
- '<span class="tool">9차시 · 최종 제작 패키지</span>'+
- '<p class="hint">아래 패키지를 같은 Gemini Notebook에 넣어 1종을 만들고, 결과를 원본과 대조합니다.</p>'+
+ return '<h2><i>11</i>Gemini Notebook에서 콘텐츠 직접 제작 · 공유 전 다섯 문</h2>'+
+ '<span class="tool">9차시 · Studio 실행</span>'+
+ '<p class="hint">이 단계에서는 채팅에 긴 제작 패키지를 넣는 것이 아니라, <b>선택한 Studio 기능의 맞춤설정에서 프롬프트를 넣고 실제 콘텐츠를 생성</b>합니다.</p>'+
 
+ '<div class="phaseBox"><b>1단계 · 어디서 실행하나요?</b>'+
+ '<span>선택한 콘텐츠: '+esc(contentTypeText())+' → 실행 기능: '+esc(studioArtifactName())+'</span></div>'+
+ '<div class="execSteps"><b>실행 순서</b>'+executionStepsHtml()+'</div>'+
+
+ '<div class="phaseBox"><b>2단계 · 버튼에서 선택할 설정</b>'+
+ '<span>아래 내용은 복사하는 프롬프트가 아니라 Studio 화면에서 확인할 설정입니다.</span></div>'+
+ '<div class="settingBox">'+esc(studioSettingsText())+'</div>'+
+
+ '<div class="phaseBox"><b>3단계 · 맞춤 프롬프트에 붙여넣을 내용</b>'+
+ '<span>아래 박스만 복사합니다. AI 동영상·오디오·퀴즈는 채팅창이 아니라 해당 Studio 맞춤설정 프롬프트 칸에 넣습니다.</span></div>'+
  '<div class="prompt final">'+
- '<div class="bar"><em>'+esc(contentTypeText())+' 제작 패키지</em>'+
+ '<div class="bar"><em>'+esc(contentTypeText())+' 맞춤 프롬프트</em>'+
  '<button class="mini" data-copy="1">복사</button></div>'+
- '<textarea readonly>'+esc(pPackage())+'</textarea>'+
+ '<textarea readonly>'+esc(studioCustomPrompt())+'</textarea>'+
  '</div>'+
 
- '<a class="golink" href="'+NOTEBOOK_URL+'" target="_blank" rel="noopener">Gemini Notebook에서 콘텐츠 만들기</a>'+
+ '<a class="golink" href="'+NOTEBOOK_URL+'" target="_blank" rel="noopener">Gemini Notebook 열기</a>'+
 
  '<div class="fld"><label>완성 결과 위치·생성 상태</label>'+
- '<input type="text" id="resultLocation" value="'+esc(S.resultLocation)+'" placeholder="파일명·링크·구성안 등"></div>'+
+ '<input type="text" id="resultLocation" value="'+esc(S.resultLocation)+'" placeholder="예: AI 동영상 오버뷰 생성 완료, 파일명·링크 등"></div>'+
 
  '<div class="fld"><label>원본과 다른 점·수정 내용 <span class="note">차이가 있었을 때만 적습니다</span></label>'+
  '<textarea id="comparisonNote" rows="4" placeholder="차이가 없으면 비워두세요.">'+esc(S.comparisonNote)+'</textarea></div>'+

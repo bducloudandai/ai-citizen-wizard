@@ -1,4 +1,4 @@
-<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.10 | 단계 상단 이동 + 08 학습자 직접 재작성 -->
+<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.12 | 06 저장호환 오류 + 07 실제 Gemini 출력 파싱 + 08 5칸 정리 -->
 <div id="wz">
 <style>
 #wz *{box-sizing:border-box}
@@ -73,6 +73,12 @@
 #wz .refline{margin:6px 0 7px;padding:8px 10px;background:#f5f7f9;border-left:3px solid #aeb8c3;font-size:11.8px;line-height:1.55;color:var(--ink2);white-space:pre-wrap}
 #wz .refline b{color:var(--ink)}
 #wz .studentwrite{margin-bottom:13px}
+#wz .versionTag{text-align:right;font-size:10.5px;color:#7b8791;margin:-10px 2px 4px;letter-spacing:.02em}
+#wz .phaseBox{margin:14px 0 10px;padding:10px 12px;background:#edf3f0;border-left:3px solid var(--accent);border-radius:3px}
+#wz .phaseBox b{display:block;font-size:13px;margin-bottom:2px}
+#wz .phaseBox span{font-size:11.8px;color:var(--ink2)}
+#wz .parseOk{font-size:11.5px;color:var(--accent);margin:-5px 0 12px}
+
 
 #wz .resumeOverlay{position:fixed;inset:0;background:rgba(27,36,48,.45);display:none;align-items:center;justify-content:center;padding:18px;z-index:99999}
 #wz .resumeOverlay.show{display:flex}
@@ -97,6 +103,7 @@
 <h1>스마트 에이징 안내자료 · AI 콘텐츠 위저드</h1>
 <p class="sub">ChatGPT로 공식자료를 찾고, 사람이 확인한 뒤, Gemini Notebook에서 6~10차시 흐름대로 검증·선별·제작·활용합니다.</p>
 
+<div class="versionTag" id="versionTag">v0.12</div>
 <div class="rail" id="rail"></div>
 <div class="panel" id="panel"></div>
 <div class="err" id="err"></div>
@@ -136,7 +143,7 @@
 var CHATGPT_URL="https://chatgpt.com/";
 var NOTEBOOK_URL="https://notebooklm.google.com/";
 
-var WIZARD_VERSION="v0.10";
+var WIZARD_VERSION="v0.12";
 var STORAGE_KEY="ai_citizen_smart_aging_wizard_autosave_v2";
 var saveTimer=null;
 var storageAvailable=true;
@@ -857,15 +864,19 @@ function parseVerifyResult(raw){
 }
 
 function claimDetailsComplete(d){
+ function has(v){
+  return !!String(v==null?"":v).trim();
+ }
+
  return !!(
   d &&
-  d.statement.trim() &&
-  d.institution.trim() &&
-  d.document.trim() &&
-  d.date.trim() &&
-  d.location.trim() &&
-  d.evidence.trim() &&
-  d.scope.trim()
+  has(d.statement) &&
+  has(d.institution) &&
+  has(d.document) &&
+  has(d.date) &&
+  has(d.location) &&
+  has(d.evidence) &&
+  has(d.scope)
  );
 }
 
@@ -995,6 +1006,261 @@ function parseCardResult(raw){
 
  return found;
 }
+
+function cleanMdText(v){
+ return String(v||"")
+  .replace(/\\([*_~`])/g,"$1")
+  .replace(/\*\*/g,"")
+  .replace(/__/g,"")
+  .replace(/`/g,"")
+  .replace(/^\s*[-•]\s*/,"")
+  .trim();
+}
+
+function headingText(line){
+ return cleanMdText(
+  String(line||"")
+   .replace(/^\s*#{1,6}\s*/,"")
+   .replace(/^\s*\[/,"")
+   .replace(/\]\s*$/,"")
+ ).trim();
+}
+
+function sectionByHeading(text,startRe,endRes){
+ var lines=String(text||"").replace(/\r\n?/g,"\n").split("\n");
+ var start=-1;
+ var end=lines.length;
+
+ for(var i=0;i<lines.length;i++){
+  if(startRe.test(headingText(lines[i]))){
+   start=i+1;
+   break;
+  }
+ }
+
+ if(start<0)return "";
+
+ for(var j=start;j<lines.length;j++){
+  var h=headingText(lines[j]);
+
+  for(var e=0;e<endRes.length;e++){
+   if(endRes[e].test(h)){
+    end=j;
+    return lines.slice(start,end).join("\n").trim();
+   }
+  }
+ }
+
+ return lines.slice(start,end).join("\n").trim();
+}
+
+function listItemsFromSection(section,max){
+ var lines=String(section||"").replace(/\r\n?/g,"\n").split("\n");
+ var out=[];
+ var cur="";
+
+ function push(){
+  var v=cleanMdText(cur)
+   .replace(/^\[\s*[xX]?\s*\]\s*/,"")
+   .trim();
+
+  if(v && !/^없음$/i.test(v)){
+   out.push(v);
+  }
+  cur="";
+ }
+
+ for(var i=0;i<lines.length;i++){
+  var raw=lines[i];
+  var line=raw.trim();
+
+  if(!line || /^---+$/.test(line))continue;
+  if(/^#{1,6}\s+/.test(line))continue;
+
+  var m=line.match(/^\s*(?:[-•]\s*)?(?:\[\s*[xX]?\s*\]\s*)?(?:\d+[.)]\s+)?(.+)$/);
+  if(!m)continue;
+
+  var explicit=
+   /^\s*(?:\d+[.)]\s+|[-•]\s+\[\s*[xX]?\s*\]|[-•]\s+)/.test(line);
+
+  if(explicit){
+   if(cur)push();
+   cur=m[1];
+  }else if(cur){
+   cur+=" "+m[1];
+  }else{
+   cur=m[1];
+  }
+
+  if(out.length>=max)break;
+ }
+
+ if(cur && out.length<max)push();
+
+ return out.slice(0,max);
+}
+
+function firstMeaningfulItem(section){
+ var items=listItemsFromSection(section,3);
+ if(items.length)return items[0];
+
+ var lines=String(section||"").split(/\n+/);
+ for(var i=0;i<lines.length;i++){
+  var v=cleanMdText(lines[i]);
+  if(v && !/^---+$/.test(v)){
+   return v;
+  }
+ }
+ return "";
+}
+
+function cleanLabeledBlock(section){
+ var lines=String(section||"").replace(/\r\n?/g,"\n").split("\n");
+ var out=[];
+
+ for(var i=0;i<lines.length;i++){
+  var v=cleanMdText(lines[i])
+   .replace(/^\[\s*[xX]?\s*\]\s*/,"")
+   .trim();
+
+  if(!v || /^---+$/.test(v))continue;
+  if(/^#{1,6}\s+/.test(lines[i].trim()))continue;
+  out.push(v);
+ }
+
+ return out.join("\n").trim();
+}
+
+function parseHoldBlock(section){
+ var text=cleanLabeledBlock(section);
+ var result={item:"",reason:""};
+
+ var item=text.match(/(?:정보|제외\s*후보|보류\s*후보)\s*:\s*([\s\S]*?)(?=\n\s*(?:이유|사유)\s*:|$)/i);
+ var reason=text.match(/(?:이유|사유)\s*:\s*([\s\S]*)$/i);
+
+ if(item)result.item=item[1].trim();
+ if(reason)result.reason=reason[1].trim();
+
+ if(!result.item || !result.reason){
+  var items=listItemsFromSection(section,2);
+  if(!result.item && items[0])result.item=items[0].replace(/^(?:정보|제외\s*후보|보류\s*후보)\s*:\s*/i,"").trim();
+  if(!result.reason && items[1])result.reason=items[1].replace(/^(?:이유|사유)\s*:\s*/i,"").trim();
+ }
+
+ return result;
+}
+
+function parseQuestionBlock(section){
+ var lines=String(section||"").replace(/\r\n?/g,"\n").split("\n");
+
+ for(var i=0;i<lines.length;i++){
+  var line=cleanMdText(lines[i]);
+  if(!line || /^---+$/.test(line))continue;
+
+  var q=line.match(/^(?:질문\s*:)?\s*(.+\?)\s*$/);
+  if(q)return q[1].trim();
+ }
+
+ for(var j=0;j<lines.length;j++){
+  var v=cleanMdText(lines[j]).replace(/^질문\s*:\s*/,"").trim();
+  if(v && !/^---+$/.test(v) && !/^(?:🥣|📌|👉|원하시면|어르신이)/.test(v)){
+   return v;
+  }
+ }
+
+ return "";
+}
+
+function parseSelectResult(raw){
+ var txt=String(raw||"").replace(/\r\n?/g,"\n");
+ if(!txt.trim())return 0;
+
+ var coreSec=sectionByHeading(
+  txt,
+  /핵심정보\s*3개/i,
+  [/체크\s*가능한\s*행동/i,/도움받을\s*곳/i,/주의문장/i,/보류.*제외/i,/추가\s*확인\s*질문/i]
+ );
+
+ var actionSec=sectionByHeading(
+  txt,
+  /체크\s*가능한\s*행동/i,
+  [/도움받을\s*곳/i,/주의문장/i,/보류.*제외/i,/추가\s*확인\s*질문/i]
+ );
+
+ var helpSec=sectionByHeading(
+  txt,
+  /도움받을\s*곳.*확인할\s*내용/i,
+  [/주의문장/i,/보류.*제외/i,/추가\s*확인\s*질문/i]
+ );
+
+ var cautionSec=sectionByHeading(
+  txt,
+  /주의문장/i,
+  [/보류.*제외/i,/추가\s*확인\s*질문/i]
+ );
+
+ var holdSec=sectionByHeading(
+  txt,
+  /보류.*제외/i,
+  [/추가\s*확인\s*질문/i]
+ );
+
+ var questionSec=sectionByHeading(
+  txt,
+  /추가\s*확인\s*질문/i,
+  []
+ );
+
+ var core=listItemsFromSection(coreSec,3);
+ var actions=listItemsFromSection(actionSec,3);
+ var help=cleanLabeledBlock(helpSec);
+ var caution=firstMeaningfulItem(cautionSec);
+ var hold=parseHoldBlock(holdSec);
+ var question=parseQuestionBlock(questionSec);
+
+ if(core.length){
+  for(var i=0;i<3;i++)S.core[i]=core[i]||"";
+ }
+
+ if(actions.length){
+  for(var a=0;a<3;a++)S.actions[a]=actions[a]||"";
+ }
+
+ if(help)S.help=help;
+ if(caution)S.caution=caution;
+ if(hold.item)S.holdItem=hold.item;
+ if(hold.reason)S.holdReason=hold.reason;
+ if(question)S.question=question;
+
+ var found=0;
+ if(core.length===3)found++;
+ if(actions.length>=2)found++;
+ if(help)found++;
+ if(caution)found++;
+ if(S.holdItem && S.holdReason)found++;
+ if(question)found++;
+
+ return found;
+}
+
+function refreshSelectionFields(){
+ var coreEls=document.querySelectorAll("[data-core]");
+ for(var i=0;i<coreEls.length;i++){
+  coreEls[i].value=S.core[+coreEls[i].dataset.core]||"";
+ }
+
+ var actionEls=document.querySelectorAll("[data-action]");
+ for(var a=0;a<actionEls.length;a++){
+  actionEls[a].value=S.actions[+actionEls[a].dataset.action]||"";
+ }
+
+ if($("help"))$("help").value=S.help||"";
+ if($("caution"))$("caution").value=S.caution||"";
+ if($("question"))$("question").value=S.question||"";
+ if($("holdItem"))$("holdItem").value=S.holdItem||"";
+ if($("holdReason"))$("holdReason").value=S.holdReason||"";
+}
+
 
 function cardFieldsHtml(){
  var h="";
@@ -1371,7 +1637,13 @@ c.join("\n")+"\n\n"+
 "[구성 확인표]\n"+
 (S.audit.trim()?S.audit:"(미입력)")+"\n\n"+
 
-"각 카드에 대해 '고르기 5문'을 순서대로 적용해 표로 제안하세요.\n\n"+
+"중요: 지금은 7차시 '선별' 단계입니다. 쉬운 문장으로 다시 쓰는 일은 8차시에서 합니다.\n"+
+"따라서 정보카드에 없는 이유·효과·위험·시간·수치·의학적 설명을 새로 만들지 마세요.\n"+
+"핵심정보와 행동은 가능한 한 정보카드의 검증된 표현을 그대로 사용하고, 필요하면 뜻을 바꾸지 않는 범위에서 불필요한 말만 줄이세요.\n"+
+"서로 다른 카드를 합칠 때도 두 카드의 의미를 단순 연결할 뿐 새로운 결론을 만들지 마세요.\n"+
+"출처에서 확인되지 않은 내용은 최종 재료에 넣지 말고 '추가 확인 질문'으로 보내세요.\n\n"+
+
+"각 카드에 대해 '고르기 5문'을 순서대로 적용해 먼저 표로 분석하세요.\n\n"+
 
 "① 대상 — 지금 정한 대상과 생활장면에 쓰이는가?\n"+
 "② 근거 — 6차시에서 출처와 적용범위를 확인한 정보인가?\n"+
@@ -1398,13 +1670,34 @@ BASKET_BLOCK+"\n\n"+
 "'추가 확인 필요' 카드도 사실처럼 사용하지 마세요.\n"+
 "최종 선택은 사람이 합니다.\n\n"+
 
-"표 다음에 아래를 제안하세요.\n"+
-"[핵심정보 3개 후보]\n"+
+"표 분석 뒤에는 반드시 아래 형식을 그대로 사용하세요.\n"+
+"'후보'라는 말을 붙이지 말고, 괄호 안 개수대로만 작성하세요.\n"+
+"항목 이름을 바꾸지 마세요.\n\n"+
+
+"[핵심정보 3개]\n"+
+"1. ...\n"+
+"2. ...\n"+
+"3. ...\n\n"+
+
 "[체크 가능한 행동 2~3개]\n"+
+"1. ...\n"+
+"2. ...\n"+
+"3. ... (없으면 생략)\n\n"+
+
 "[도움받을 곳과 확인할 내용]\n"+
-"[주의문장 후보 2개]\n"+
-"[보류 또는 제외 후보 1개와 이유]\n"+
-"[추가 확인 질문]";
+"...\n\n"+
+
+"[주의문장 1개]\n"+
+"...\n\n"+
+
+"[보류 또는 제외]\n"+
+"정보: ...\n"+
+"이유: ...\n\n"+
+
+"[추가 확인 질문]\n"+
+"...?\n\n"+
+
+"위 형식 뒤에는 PDF·이미지·카드 제작 제안이나 다른 후속 제안을 추가하지 마세요.";
 }
 
 /* 08. 쉬운 문장 5원칙 */
@@ -1847,10 +2140,13 @@ function scr7(){
  '<span>행동</span>'+
  '<span>자리</span>'+
  '</div>'+
- '<p class="hint">Gemini 결과를 한 번 붙여넣으면 <b>카드 1~6과 구성 확인표를 자동으로 채우고</b>, 아래 고르기 5문 프롬프트에도 즉시 반영합니다.</p>'+
- block("Gemini Notebook · 정보카드 6장",pCards(),"long")+
+ '<p class="hint">두 단계로 진행합니다. Gemini 결과는 각각 한 번만 붙여넣고, 자동으로 채워진 내용을 사람이 눈으로 확인·수정합니다.</p>'+
 
- '<div class="fld"><label>Gemini Notebook의 정보카드 결과 붙여넣기</label>'+
+ '<div class="phaseBox"><b>1단계 · 검증한 근거를 정보카드로 만들기</b>'+
+ '<span>6차시에서 확인한 근거를 생활안내 카드 1~6과 구성 확인표로 정리합니다.</span></div>'+
+ block("Gemini Notebook · 1단계 정보카드 6장 만들기",pCards(),"long")+
+
+ '<div class="fld"><label>1단계 Gemini Notebook 결과 붙여넣기</label>'+
  '<textarea id="cardResult" rows="10" placeholder="[1부] 정보카드 6장 ...&#10;&#10;[2부] 구성 확인표 ...">'+
  esc(S.cardResult)+'</textarea></div>'+
 
@@ -1861,12 +2157,16 @@ function scr7(){
  '<div class="fld"><label>구성 확인표</label>'+
  '<textarea id="audit" rows="5">'+esc(S.audit)+'</textarea></div>'+
 
- promptBox("selectPromptText","Gemini Notebook · 고르기 5문 적용",pSelect(),"long")+
+ '<div class="phaseBox"><b>2단계 · 고르기 5문으로 최종 재료 선별하기</b>'+
+ '<span>대상·근거·필요·행동·자리를 기준으로 무엇을 넣고, 합치고, 보류·제외할지 Gemini가 제안합니다.</span></div>'+
+ promptBox("selectPromptText","Gemini Notebook · 2단계 고르기 5문 적용",pSelect(),"long")+
 
- '<div class="fld"><label>AI의 선별 제안 <span class="note">보관용</span></label>'+
- '<textarea id="selectResult" rows="6">'+esc(S.selectResult)+'</textarea></div>'+
+ '<div class="fld"><label>2단계 Gemini Notebook 결과 붙여넣기 <span class="note">붙여넣으면 아래 최종 선택 칸을 자동으로 채웁니다</span></label>'+
+ '<textarea id="selectResult" rows="9" placeholder="[핵심정보 3개] ...&#10;[체크 가능한 행동 2~3개] ...&#10;[도움받을 곳과 확인할 내용] ...">'+esc(S.selectResult)+'</textarea></div>'+
+ '<div class="parseOk" id="selectParseStatus">Gemini 결과를 붙여넣으면 핵심정보·행동·도움·주의·보류/제외·추가질문을 자동으로 읽습니다.</div>'+
 
- '<div class="canon"><h3>사람이 최종 선택</h3>';
+ '<div class="canon"><h3>사람이 최종 확인·수정</h3>'+
+ '<p class="hint">아래 내용은 2단계 Gemini 결과에서 자동으로 채워집니다. 원문과 맞는지 눈으로 확인하고 필요한 경우에만 수정하세요.</p>';
 
  for(var j=0;j<3;j++){
   h+='<div class="fld"><label>핵심정보 '+(j+1)+'</label>'+
@@ -1922,21 +2222,17 @@ function scr8(){
 
  '<div class="canon"><h3>한 장 5칸 정본 — 내가 직접 바꿔 쓰기</h3>'+
 
- '<div class="studentwrite"><div class="fld"><label>1. 제목·대상 — 행동형 제목</label>'+
- '<div class="refline"><b>제목을 만들 때 참고</b>\\n대상·생활장면: '+esc(S.aud)+'\\n목적: '+esc(S.purpose)+'</div>'+
- '<input type="text" id="finalTitle" value="'+esc(S.finalTitle)+'" placeholder="예: 외출 전 세 가지만 확인해요"></div>'+
+ '<div class="studentwrite"><div class="fld"><label>1. 제목·누구·언제</label>'+
+ '<div class="refline"><b>제목을 만들 때 참고</b><br>대상·생활장면: '+esc(S.aud)+'<br>목적: '+esc(S.purpose)+'</div>'+
+ '<input type="text" id="finalTitle" value="'+esc(S.finalTitle)+'" placeholder="행동형 제목을 직접 적어보세요."></div>'+
 
- '<div class="fld"><label>대상과 생활장면 <span class="note">이전 내용을 짧고 쉽게 다시 씁니다</span></label>'+
- '<div class="refline"><b>이전 내용</b>\\n'+esc(S.aud)+'</div>'+
- '<textarea id="finalAud" rows="2" placeholder="누가, 언제 이 한 장을 보는지 짧게 적어보세요.">'+esc(S.finalAud)+'</textarea></div>'+
-
- '<div class="fld"><label>이 한 장의 목적</label>'+
- '<div class="refline"><b>이전 내용</b>\\n'+esc(S.purpose)+'</div>'+
- '<textarea id="finalPurpose" rows="2" placeholder="이 한 장을 보고 무엇을 확인하거나 할 수 있어야 하는지 적어보세요.">'+esc(S.finalPurpose)+'</textarea></div></div>';
+ '<div class="fld"><label>누구·언제 <span class="note">이전 내용을 짧고 쉽게 다시 씁니다</span></label>'+
+ '<div class="refline"><b>이전 내용</b><br>'+esc(S.aud)+'</div>'+
+ '<textarea id="finalAud" rows="2" placeholder="누가, 언제 이 한 장을 보는지 짧게 적어보세요.">'+esc(S.finalAud)+'</textarea></div></div>';
 
  for(var i=0;i<3;i++){
   h+='<div class="studentwrite"><div class="fld"><label>2. 꼭 확인할 것 '+(i+1)+'</label>'+
-  '<div class="refline"><b>이전 문장</b>\\n'+esc(S.core[i])+'</div>'+
+  '<div class="refline"><b>이전 문장</b><br>'+esc(S.core[i])+'</div>'+
   '<textarea data-finalcore="'+i+'" rows="2" placeholder="뜻은 유지하고 더 짧고 익숙한 말로 바꿔보세요.">'+esc(S.finalCore[i])+'</textarea></div></div>';
  }
 
@@ -1944,17 +2240,17 @@ function scr8(){
   h+='<div class="studentwrite"><div class="fld"><label>3. 오늘 해볼 일 '+(a+1)+
   (a===2?' <span class="note">선택</span>':'')+
   '</label>'+
-  '<div class="refline"><b>이전 문장</b>\\n'+esc(S.actions[a])+'</div>'+
+  '<div class="refline"><b>이전 문장</b><br>'+esc(S.actions[a])+'</div>'+
   '<input type="text" data-finalaction="'+a+'" value="'+esc(S.finalActions[a])+'" placeholder="오늘 바로 확인할 수 있는 한 행동으로 적어보세요.">'+
   '</div></div>';
  }
 
  h+='<div class="studentwrite"><div class="fld"><label>4. 도움받을 곳</label>'+
- '<div class="refline"><b>이전 내용</b>\\n'+esc(S.help)+'</div>'+
+ '<div class="refline"><b>이전 내용</b><br>'+esc(S.help)+'</div>'+
  '<textarea id="finalHelp" rows="3" placeholder="어디에 무엇을 물어볼지 쉽게 적어보세요.">'+esc(S.finalHelp)+'</textarea></div></div>'+
 
  '<div class="studentwrite"><div class="fld"><label>5. 주의</label>'+
- '<div class="refline"><b>이전 내용</b>\\n'+esc(S.caution)+'</div>'+
+ '<div class="refline"><b>이전 내용</b><br>'+esc(S.caution)+'</div>'+
  '<textarea id="finalCaution" rows="2" placeholder="조건이나 주의가 빠지지 않게 짧게 적어보세요.">'+esc(S.finalCaution)+'</textarea></div></div>'+
 
  '<div class="fld"><label>5. 출처 <span class="note">자동 유지 · 다시 입력하지 않습니다</span></label>'+
@@ -2218,14 +2514,29 @@ function render(){
 }
 
 function scrollStepTop(){
- requestAnimationFrame(function(){
+ try{
+  if(document.activeElement && document.activeElement.blur){
+   document.activeElement.blur();
+  }
+ }catch(e){}
+
+ function goTop(){
+  try{
+   window.scrollTo({top:0,left:0,behavior:"auto"});
+  }catch(e){
+   window.scrollTo(0,0);
+  }
+
   var root=$("wz");
   if(root && root.scrollIntoView){
    root.scrollIntoView({behavior:"auto",block:"start"});
-  }else{
-   window.scrollTo(0,0);
   }
- });
+ }
+
+ goTop();
+ requestAnimationFrame(goTop);
+ setTimeout(goTop,60);
+ setTimeout(goTop,180);
 }
 
 /* 입력 이벤트 */
@@ -2306,7 +2617,18 @@ function onInput(e){
   updateSelectPrompt();
  }
 
- else if(id==="selectResult")S.selectResult=t.value;
+ else if(id==="selectResult"){
+  S.selectResult=t.value;
+  var parsed=parseSelectResult(S.selectResult);
+  refreshSelectionFields();
+
+  var ss=$("selectParseStatus");
+  if(ss){
+   ss.innerHTML=S.selectResult.trim()
+    ? "자동 인식 결과: <strong>"+parsed+"/6 영역</strong> · 아래 칸을 눈으로 확인하세요."
+    : "Gemini 결과를 붙여넣으면 핵심정보·행동·도움·주의·보류/제외·추가질문을 자동으로 읽습니다.";
+  }
+ }
 
  else if(id==="help")S.help=t.value;
  else if(id==="caution")S.caution=t.value;
@@ -2823,8 +3145,8 @@ function valid(){
  }
 
  if(step===7){
-  if(!S.finalTitle.trim() || !S.finalAud.trim() || !S.finalPurpose.trim()){
-   return "행동형 제목·대상·목적을 직접 작성하세요.";
+  if(!S.finalTitle.trim() || !S.finalAud.trim()){
+   return "행동형 제목과 누구·언제를 직접 작성하세요.";
   }
 
   for(var y=0;y<3;y++){
@@ -3100,7 +3422,7 @@ function applySavedPayload(payload){
  }
 
  S=JSON.parse(JSON.stringify(INITIAL_STATE));
- normalize(payload.state);
+ normalize(payload.state,payload.wizardVersion);
 
  var savedStep=parseInt(payload.currentStep,10);
  step=isNaN(savedStep) ? 0 : Math.max(0,Math.min(LAST,savedStep));
@@ -3326,7 +3648,7 @@ function bindPersistenceControls(){
 }
 
 /* 구버전 백업 데이터 호환 */
-function normalize(o){
+function normalize(o,fromVersion){
 
  if(!o || typeof o!=="object"){
   return;
@@ -3404,7 +3726,11 @@ function normalize(o){
    document:oldd.document||"",
    date:oldd.date||"",
    location:oldd.location||"",
+   evidence:oldd.evidence||"",
    scope:oldd.scope||"",
+   scopeTarget:oldd.scopeTarget||"",
+   scopeCondition:oldd.scopeCondition||"",
+   scopeOther:oldd.scopeOther||"",
    application:oldd.application||""
   };
  }
@@ -3438,9 +3764,7 @@ function normalize(o){
   S.actions.push("");
  }
 
- /* v0.9 이전 백업 호환:
-    예전 버전에서 8차시 정본까지 확정했다면 그때의 core/actions/help/caution을
-    새 정본 필드로 옮겨 기존 작업을 잃지 않습니다. */
+ /* 8차시 직접 재작성 필드 */
  if(!Array.isArray(S.finalCore)){
   S.finalCore=["","",""];
  }
@@ -3455,15 +3779,41 @@ function normalize(o){
   S.finalActions.push("");
  }
 
- if(o.onePageFreeze && !Array.isArray(o.finalCore)){
-  S.finalCore=S.core.slice(0,3);
-  S.finalActions=S.actions.slice(0,3);
-  if(!S.finalHelp)S.finalHelp=S.help||"";
-  if(!S.finalCaution)S.finalCaution=S.caution||"";
- }
-
  if(!S.finalHelp)S.finalHelp="";
  if(!S.finalCaution)S.finalCaution="";
+
+ /* v0.9 이하에서 이어오는 작업은 8차시 직접 재작성 활동이 없었던 버전입니다.
+    1~7차시 작업은 유지하되 8차시 정본만 비워 학습자가 새 활동을 직접 수행합니다. */
+ var fv=String(fromVersion||"");
+ var oldStep8=(fv==="legacy" || fv==="v0.8" || fv==="v0.9" || fv==="");
+
+ if(oldStep8){
+  S.finalTitle="";
+  S.finalAud="";
+  S.finalPurpose="";
+  S.finalCore=["","",""];
+  S.finalActions=["","",""];
+  S.finalHelp="";
+  S.finalCaution="";
+  S.onePageFreeze=false;
+ }
+
+ if(fv==="v0.10"){
+  var sameCore=S.finalCore.join("\n")===S.core.slice(0,3).join("\n");
+  var sameActions=S.finalActions.join("\n")===S.actions.slice(0,3).join("\n");
+  var sameHelp=(S.finalHelp||"")===(S.help||"");
+  var sameCaution=(S.finalCaution||"")===(S.caution||"");
+
+  if(!String(S.finalTitle||"").trim() && sameCore && sameActions && sameHelp && sameCaution){
+   S.finalAud="";
+   S.finalPurpose="";
+   S.finalCore=["","",""];
+   S.finalActions=["","",""];
+   S.finalHelp="";
+   S.finalCaution="";
+   S.onePageFreeze=false;
+  }
+ }
 
  [
   ["topicChecks",3],
@@ -3520,6 +3870,40 @@ function normalize(o){
  if(!S.revisionPlan)S.revisionPlan="";
  if(!S.firstUsePlan)S.firstUsePlan="";
  if(!S.shareIntent)S.shareIntent="";
+
+ /* v0.11에서 저장된 작업 중 06 evidence 필드가 normalize 과정에서 유실된 경우
+    원래 Gemini 붙여넣기 결과에서 다시 복구합니다. */
+ if(String(S.verif||"").trim()){
+  var needVerifyRepair=false;
+  var cc=parseInt(S.claimCount||"0",10);
+
+  for(var vr=0;vr<cc;vr++){
+   if(!String((S.claimDetails[vr]||{}).evidence||"").trim()){
+    needVerifyRepair=true;
+    break;
+   }
+  }
+
+  if(needVerifyRepair){
+   var oldClaims=S.claims.slice();
+   parseVerifyResult(S.verif);
+
+   for(var vc=0;vc<4;vc++){
+    if(oldClaims[vc]){
+     S.claims[vc]=oldClaims[vc];
+    }
+   }
+  }
+ }
+
+ /* v0.10~v0.11의 07 결과가 실제 Gemini 제목 변형 때문에 잘못 들어간 경우
+    원래 붙여넣은 결과를 새 파서로 다시 읽어 자동 복구합니다. */
+ if(
+  (String(fromVersion||"")==="v0.10" || String(fromVersion||"")==="v0.11") &&
+  String(S.selectResult||"").trim()
+ ){
+  parseSelectResult(S.selectResult);
+ }
 }
 
 function initPersistence(){

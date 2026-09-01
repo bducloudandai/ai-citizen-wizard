@@ -1,4 +1,4 @@
-<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.10 | 단계 상단 이동 + 08 학습자 직접 재작성 -->
+<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.11 | 상단 이동 보강 + 07 2단계/자동채움 + 버전표시 -->
 <div id="wz">
 <style>
 #wz *{box-sizing:border-box}
@@ -73,6 +73,12 @@
 #wz .refline{margin:6px 0 7px;padding:8px 10px;background:#f5f7f9;border-left:3px solid #aeb8c3;font-size:11.8px;line-height:1.55;color:var(--ink2);white-space:pre-wrap}
 #wz .refline b{color:var(--ink)}
 #wz .studentwrite{margin-bottom:13px}
+#wz .versionTag{text-align:right;font-size:10.5px;color:#7b8791;margin:-10px 2px 4px;letter-spacing:.02em}
+#wz .phaseBox{margin:14px 0 10px;padding:10px 12px;background:#edf3f0;border-left:3px solid var(--accent);border-radius:3px}
+#wz .phaseBox b{display:block;font-size:13px;margin-bottom:2px}
+#wz .phaseBox span{font-size:11.8px;color:var(--ink2)}
+#wz .parseOk{font-size:11.5px;color:var(--accent);margin:-5px 0 12px}
+
 
 #wz .resumeOverlay{position:fixed;inset:0;background:rgba(27,36,48,.45);display:none;align-items:center;justify-content:center;padding:18px;z-index:99999}
 #wz .resumeOverlay.show{display:flex}
@@ -97,6 +103,7 @@
 <h1>스마트 에이징 안내자료 · AI 콘텐츠 위저드</h1>
 <p class="sub">ChatGPT로 공식자료를 찾고, 사람이 확인한 뒤, Gemini Notebook에서 6~10차시 흐름대로 검증·선별·제작·활용합니다.</p>
 
+<div class="versionTag" id="versionTag">v0.11</div>
 <div class="rail" id="rail"></div>
 <div class="panel" id="panel"></div>
 <div class="err" id="err"></div>
@@ -136,7 +143,7 @@
 var CHATGPT_URL="https://chatgpt.com/";
 var NOTEBOOK_URL="https://notebooklm.google.com/";
 
-var WIZARD_VERSION="v0.10";
+var WIZARD_VERSION="v0.11";
 var STORAGE_KEY="ai_citizen_smart_aging_wizard_autosave_v2";
 var saveTimer=null;
 var storageAvailable=true;
@@ -996,6 +1003,98 @@ function parseCardResult(raw){
  return found;
 }
 
+function cleanNumberedLines(s,max){
+ var out=[];
+ String(s||"").split(/\n+/).forEach(function(line){
+  var v=line.replace(/^\s*(?:[-•]|\d+[.)])\s*/,"").replace(/\*\*/g,"").trim();
+  if(v && !/^없음$/i.test(v)){
+   out.push(v);
+  }
+ });
+ return out.slice(0,max);
+}
+
+function parseSelectResult(raw){
+ var txt=String(raw||"");
+ if(!txt.trim())return 0;
+
+ var labels=[
+  "[핵심정보 3개]",
+  "[체크 가능한 행동 2~3개]",
+  "[도움받을 곳과 확인할 내용]",
+  "[주의문장 1개]",
+  "[보류 또는 제외]",
+  "[추가 확인 질문]"
+ ];
+
+ function sec(label,next){
+  return sectionBetween(txt,label,next||"");
+ }
+
+ var core=cleanNumberedLines(sec(labels[0],labels[1]),3);
+ var actions=cleanNumberedLines(sec(labels[1],labels[2]),3);
+ var help=sec(labels[2],labels[3]).replace(/\*\*/g,"").trim();
+ var caution=sec(labels[3],labels[4]).replace(/\*\*/g,"").trim();
+ var hold=sec(labels[4],labels[5]).replace(/\*\*/g,"").trim();
+ var question=sec(labels[5],"").replace(/\*\*/g,"").trim();
+
+ if(core.length){
+  for(var i=0;i<3;i++)S.core[i]=core[i]||"";
+ }
+ if(actions.length){
+  for(var a=0;a<3;a++)S.actions[a]=actions[a]||"";
+ }
+ if(help)S.help=help;
+ if(caution)S.caution=caution;
+
+ if(hold){
+  var mi=hold.match(/정보\s*:\s*([\s\S]*?)(?=\n\s*이유\s*:|$)/i);
+  var mr=hold.match(/이유\s*:\s*([\s\S]*)$/i);
+
+  if(mi)S.holdItem=mi[1].trim();
+  if(mr)S.holdReason=mr[1].trim();
+
+  if(!mi && !mr){
+   var hs=cleanNumberedLines(hold,2);
+   if(hs[0])S.holdItem=hs[0];
+   if(hs[1])S.holdReason=hs[1];
+  }
+ }
+
+ if(question){
+  S.question=question.replace(/^\s*[-•]\s*/,"").trim();
+ }
+
+ var found=0;
+ if(core.length===3)found++;
+ if(actions.length>=2)found++;
+ if(help)found++;
+ if(caution)found++;
+ if(S.holdItem && S.holdReason)found++;
+ if(question)found++;
+
+ return found;
+}
+
+function refreshSelectionFields(){
+ var coreEls=document.querySelectorAll("[data-core]");
+ for(var i=0;i<coreEls.length;i++){
+  coreEls[i].value=S.core[+coreEls[i].dataset.core]||"";
+ }
+
+ var actionEls=document.querySelectorAll("[data-action]");
+ for(var a=0;a<actionEls.length;a++){
+  actionEls[a].value=S.actions[+actionEls[a].dataset.action]||"";
+ }
+
+ if($("help"))$("help").value=S.help||"";
+ if($("caution"))$("caution").value=S.caution||"";
+ if($("question"))$("question").value=S.question||"";
+ if($("holdItem"))$("holdItem").value=S.holdItem||"";
+ if($("holdReason"))$("holdReason").value=S.holdReason||"";
+}
+
+
 function cardFieldsHtml(){
  var h="";
  for(var i=0;i<6;i++){
@@ -1371,7 +1470,7 @@ c.join("\n")+"\n\n"+
 "[구성 확인표]\n"+
 (S.audit.trim()?S.audit:"(미입력)")+"\n\n"+
 
-"각 카드에 대해 '고르기 5문'을 순서대로 적용해 표로 제안하세요.\n\n"+
+"각 카드에 대해 '고르기 5문'을 순서대로 적용해 먼저 표로 분석하세요.\n\n"+
 
 "① 대상 — 지금 정한 대상과 생활장면에 쓰이는가?\n"+
 "② 근거 — 6차시에서 출처와 적용범위를 확인한 정보인가?\n"+
@@ -1398,13 +1497,32 @@ BASKET_BLOCK+"\n\n"+
 "'추가 확인 필요' 카드도 사실처럼 사용하지 마세요.\n"+
 "최종 선택은 사람이 합니다.\n\n"+
 
-"표 다음에 아래를 제안하세요.\n"+
-"[핵심정보 3개 후보]\n"+
+"표 분석 뒤에는 반드시 아래 형식을 그대로 사용해 최종 제안을 작성하세요.\n"+
+"항목 이름을 바꾸지 마세요.\n"+
+"같은 내용을 다른 항목에 반복하지 마세요.\n\n"+
+
+"[핵심정보 3개]\n"+
+"1. ...\n"+
+"2. ...\n"+
+"3. ...\n\n"+
+
 "[체크 가능한 행동 2~3개]\n"+
+"1. ...\n"+
+"2. ...\n"+
+"3. ... (없으면 비워도 됨)\n\n"+
+
 "[도움받을 곳과 확인할 내용]\n"+
-"[주의문장 후보 2개]\n"+
-"[보류 또는 제외 후보 1개와 이유]\n"+
-"[추가 확인 질문]";
+"...\n\n"+
+
+"[주의문장 1개]\n"+
+"...\n\n"+
+
+"[보류 또는 제외]\n"+
+"정보: ...\n"+
+"이유: ...\n\n"+
+
+"[추가 확인 질문]\n"+
+"...?";
 }
 
 /* 08. 쉬운 문장 5원칙 */
@@ -1847,10 +1965,13 @@ function scr7(){
  '<span>행동</span>'+
  '<span>자리</span>'+
  '</div>'+
- '<p class="hint">Gemini 결과를 한 번 붙여넣으면 <b>카드 1~6과 구성 확인표를 자동으로 채우고</b>, 아래 고르기 5문 프롬프트에도 즉시 반영합니다.</p>'+
- block("Gemini Notebook · 정보카드 6장",pCards(),"long")+
+ '<p class="hint">두 단계로 진행합니다. Gemini 결과는 각각 한 번만 붙여넣고, 자동으로 채워진 내용을 사람이 눈으로 확인·수정합니다.</p>'+
 
- '<div class="fld"><label>Gemini Notebook의 정보카드 결과 붙여넣기</label>'+
+ '<div class="phaseBox"><b>1단계 · 검증한 근거를 정보카드로 만들기</b>'+
+ '<span>6차시에서 확인한 근거를 생활안내 카드 1~6과 구성 확인표로 정리합니다.</span></div>'+
+ block("Gemini Notebook · 1단계 정보카드 6장 만들기",pCards(),"long")+
+
+ '<div class="fld"><label>1단계 Gemini Notebook 결과 붙여넣기</label>'+
  '<textarea id="cardResult" rows="10" placeholder="[1부] 정보카드 6장 ...&#10;&#10;[2부] 구성 확인표 ...">'+
  esc(S.cardResult)+'</textarea></div>'+
 
@@ -1861,12 +1982,16 @@ function scr7(){
  '<div class="fld"><label>구성 확인표</label>'+
  '<textarea id="audit" rows="5">'+esc(S.audit)+'</textarea></div>'+
 
- promptBox("selectPromptText","Gemini Notebook · 고르기 5문 적용",pSelect(),"long")+
+ '<div class="phaseBox"><b>2단계 · 고르기 5문으로 최종 재료 선별하기</b>'+
+ '<span>대상·근거·필요·행동·자리를 기준으로 무엇을 넣고, 합치고, 보류·제외할지 Gemini가 제안합니다.</span></div>'+
+ promptBox("selectPromptText","Gemini Notebook · 2단계 고르기 5문 적용",pSelect(),"long")+
 
- '<div class="fld"><label>AI의 선별 제안 <span class="note">보관용</span></label>'+
- '<textarea id="selectResult" rows="6">'+esc(S.selectResult)+'</textarea></div>'+
+ '<div class="fld"><label>2단계 Gemini Notebook 결과 붙여넣기 <span class="note">붙여넣으면 아래 최종 선택 칸을 자동으로 채웁니다</span></label>'+
+ '<textarea id="selectResult" rows="9" placeholder="[핵심정보 3개] ...&#10;[체크 가능한 행동 2~3개] ...&#10;[도움받을 곳과 확인할 내용] ...">'+esc(S.selectResult)+'</textarea></div>'+
+ '<div class="parseOk" id="selectParseStatus">Gemini 결과를 붙여넣으면 핵심정보·행동·도움·주의·보류/제외·추가질문을 자동으로 읽습니다.</div>'+
 
- '<div class="canon"><h3>사람이 최종 선택</h3>';
+ '<div class="canon"><h3>사람이 최종 확인·수정</h3>'+
+ '<p class="hint">아래 내용은 2단계 Gemini 결과에서 자동으로 채워집니다. 원문과 맞는지 눈으로 확인하고 필요한 경우에만 수정하세요.</p>';
 
  for(var j=0;j<3;j++){
   h+='<div class="fld"><label>핵심정보 '+(j+1)+'</label>'+
@@ -2218,14 +2343,29 @@ function render(){
 }
 
 function scrollStepTop(){
- requestAnimationFrame(function(){
+ try{
+  if(document.activeElement && document.activeElement.blur){
+   document.activeElement.blur();
+  }
+ }catch(e){}
+
+ function goTop(){
+  try{
+   window.scrollTo({top:0,left:0,behavior:"auto"});
+  }catch(e){
+   window.scrollTo(0,0);
+  }
+
   var root=$("wz");
   if(root && root.scrollIntoView){
    root.scrollIntoView({behavior:"auto",block:"start"});
-  }else{
-   window.scrollTo(0,0);
   }
- });
+ }
+
+ goTop();
+ requestAnimationFrame(goTop);
+ setTimeout(goTop,60);
+ setTimeout(goTop,180);
 }
 
 /* 입력 이벤트 */
@@ -2306,7 +2446,18 @@ function onInput(e){
   updateSelectPrompt();
  }
 
- else if(id==="selectResult")S.selectResult=t.value;
+ else if(id==="selectResult"){
+  S.selectResult=t.value;
+  var parsed=parseSelectResult(S.selectResult);
+  refreshSelectionFields();
+
+  var ss=$("selectParseStatus");
+  if(ss){
+   ss.innerHTML=S.selectResult.trim()
+    ? "자동 인식 결과: <strong>"+parsed+"/6 영역</strong> · 아래 칸을 눈으로 확인하세요."
+    : "Gemini 결과를 붙여넣으면 핵심정보·행동·도움·주의·보류/제외·추가질문을 자동으로 읽습니다.";
+  }
+ }
 
  else if(id==="help")S.help=t.value;
  else if(id==="caution")S.caution=t.value;
@@ -3100,7 +3251,7 @@ function applySavedPayload(payload){
  }
 
  S=JSON.parse(JSON.stringify(INITIAL_STATE));
- normalize(payload.state);
+ normalize(payload.state,payload.wizardVersion);
 
  var savedStep=parseInt(payload.currentStep,10);
  step=isNaN(savedStep) ? 0 : Math.max(0,Math.min(LAST,savedStep));
@@ -3326,7 +3477,7 @@ function bindPersistenceControls(){
 }
 
 /* 구버전 백업 데이터 호환 */
-function normalize(o){
+function normalize(o,fromVersion){
 
  if(!o || typeof o!=="object"){
   return;
@@ -3438,9 +3589,7 @@ function normalize(o){
   S.actions.push("");
  }
 
- /* v0.9 이전 백업 호환:
-    예전 버전에서 8차시 정본까지 확정했다면 그때의 core/actions/help/caution을
-    새 정본 필드로 옮겨 기존 작업을 잃지 않습니다. */
+ /* 8차시 직접 재작성 필드 */
  if(!Array.isArray(S.finalCore)){
   S.finalCore=["","",""];
  }
@@ -3455,15 +3604,41 @@ function normalize(o){
   S.finalActions.push("");
  }
 
- if(o.onePageFreeze && !Array.isArray(o.finalCore)){
-  S.finalCore=S.core.slice(0,3);
-  S.finalActions=S.actions.slice(0,3);
-  if(!S.finalHelp)S.finalHelp=S.help||"";
-  if(!S.finalCaution)S.finalCaution=S.caution||"";
- }
-
  if(!S.finalHelp)S.finalHelp="";
  if(!S.finalCaution)S.finalCaution="";
+
+ /* v0.9 이하에서 이어오는 작업은 8차시 직접 재작성 활동이 없었던 버전입니다.
+    1~7차시 작업은 유지하되 8차시 정본만 비워 학습자가 새 활동을 직접 수행합니다. */
+ var fv=String(fromVersion||"");
+ var oldStep8=(fv==="legacy" || fv==="v0.8" || fv==="v0.9" || fv==="");
+
+ if(oldStep8){
+  S.finalTitle="";
+  S.finalAud="";
+  S.finalPurpose="";
+  S.finalCore=["","",""];
+  S.finalActions=["","",""];
+  S.finalHelp="";
+  S.finalCaution="";
+  S.onePageFreeze=false;
+ }
+
+ if(fv==="v0.10"){
+  var sameCore=S.finalCore.join("\n")===S.core.slice(0,3).join("\n");
+  var sameActions=S.finalActions.join("\n")===S.actions.slice(0,3).join("\n");
+  var sameHelp=(S.finalHelp||"")===(S.help||"");
+  var sameCaution=(S.finalCaution||"")===(S.caution||"");
+
+  if(!String(S.finalTitle||"").trim() && sameCore && sameActions && sameHelp && sameCaution){
+   S.finalAud="";
+   S.finalPurpose="";
+   S.finalCore=["","",""];
+   S.finalActions=["","",""];
+   S.finalHelp="";
+   S.finalCaution="";
+   S.onePageFreeze=false;
+  }
+ }
 
  [
   ["topicChecks",3],

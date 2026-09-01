@@ -1,4 +1,4 @@
-<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.9 | 자동저장+이어하기+JSON 백업 -->
+<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.10 | 단계 상단 이동 + 08 학습자 직접 재작성 -->
 <div id="wz">
 <style>
 #wz *{box-sizing:border-box}
@@ -69,6 +69,11 @@
 #wz .persistBtns{display:flex;gap:7px;flex-wrap:wrap}
 #wz .persistBtns button{font-size:11.5px;padding:6px 10px}
 #wz .fileInput{display:none}
+#wz .rewriteIntro{margin:10px 0 14px;padding:11px 12px;background:#f7f8fa;border:1px solid var(--rule);border-radius:4px;font-size:12.5px;line-height:1.6}
+#wz .refline{margin:6px 0 7px;padding:8px 10px;background:#f5f7f9;border-left:3px solid #aeb8c3;font-size:11.8px;line-height:1.55;color:var(--ink2);white-space:pre-wrap}
+#wz .refline b{color:var(--ink)}
+#wz .studentwrite{margin-bottom:13px}
+
 #wz .resumeOverlay{position:fixed;inset:0;background:rgba(27,36,48,.45);display:none;align-items:center;justify-content:center;padding:18px;z-index:99999}
 #wz .resumeOverlay.show{display:flex}
 #wz .resumeCard{width:min(520px,100%);background:#fff;border:1px solid var(--rule);border-radius:5px;padding:20px;box-shadow:0 10px 35px rgba(0,0,0,.18)}
@@ -131,7 +136,7 @@
 var CHATGPT_URL="https://chatgpt.com/";
 var NOTEBOOK_URL="https://notebooklm.google.com/";
 
-var WIZARD_VERSION="v0.9";
+var WIZARD_VERSION="v0.10";
 var STORAGE_KEY="ai_citizen_smart_aging_wizard_autosave_v2";
 var saveTimer=null;
 var storageAvailable=true;
@@ -268,6 +273,10 @@ var S={
  finalTitle:"",
  finalAud:"",
  finalPurpose:"",
+ finalCore:["","",""],
+ finalActions:["","",""],
+ finalHelp:"",
+ finalCaution:"",
  onePageFreeze:false,
 
  infographicLocation:"",
@@ -1439,13 +1448,13 @@ return "선택한 공식 소스와 아래 8차시 한 장 5칸 정본만 사용�
 "[한 장 5칸 정본]\n"+
 "1. 제목·대상: "+S.finalTitle+" / "+S.finalAud+"\n"+
 "2. 꼭 확인할 것: "+
-"① "+S.core[0]+" "+
-"② "+S.core[1]+" "+
-"③ "+S.core[2]+"\n"+
+"① "+S.finalCore[0]+" "+
+"② "+S.finalCore[1]+" "+
+"③ "+S.finalCore[2]+"\n"+
 "3. 오늘 해볼 일: "+
-S.actions.filter(function(x){return x.trim()}).join(" / ")+"\n"+
-"4. 도움받을 곳: "+S.help+"\n"+
-"5. 주의·출처: "+S.caution+" / "+sourceList()+"\n"+
+S.finalActions.filter(function(x){return x.trim()}).join(" / ")+"\n"+
+"4. 도움받을 곳: "+S.finalHelp+"\n"+
+"5. 주의·출처: "+S.finalCaution+" / "+sourceList()+"\n"+
 "추가 확인 질문: "+S.question+"\n\n"+
 
 "요청:\n"+
@@ -1544,12 +1553,12 @@ return "━━━━━━━━━━━━━━━━━━━━\n"+
 "[잠근 원본]\n"+
 "주제: "+S.finalTitle+"\n"+
 "목적: "+S.finalPurpose+"\n"+
-"핵심정보 1: "+S.core[0]+"\n"+
-"핵심정보 2: "+S.core[1]+"\n"+
-"핵심정보 3: "+S.core[2]+"\n"+
-"행동: "+S.actions.filter(function(x){return x.trim()}).join(" / ")+"\n"+
-"도움받을 곳: "+S.help+"\n"+
-"주의: "+S.caution+"\n"+
+"핵심정보 1: "+S.finalCore[0]+"\n"+
+"핵심정보 2: "+S.finalCore[1]+"\n"+
+"핵심정보 3: "+S.finalCore[2]+"\n"+
+"행동: "+S.finalActions.filter(function(x){return x.trim()}).join(" / ")+"\n"+
+"도움받을 곳: "+S.finalHelp+"\n"+
+"주의: "+S.finalCaution+"\n"+
 "공식 출처:\n"+
 sourceList()+"\n\n"+
 
@@ -1573,8 +1582,8 @@ contentInstruction()+"\n\n"+
 function pFinalSpeech(){
  var ci=parseInt(S.presentationCore||"0",10);
  var ai=parseInt(S.presentationAction||"0",10);
- var core=S.core[ci]||S.core[0]||"(핵심정보)";
- var action=S.actions[ai]||S.actions[0]||"(행동)";
+ var core=S.finalCore[ci]||S.finalCore[0]||"(핵심정보)";
+ var action=S.finalActions[ai]||S.finalActions[0]||"(행동)";
 
 return "[30·60·30 발표 초안]\n\n"+
 "30초 — 이 가이드는 "+S.finalAud+
@@ -1583,7 +1592,7 @@ return "[30·60·30 발표 초안]\n\n"+
 "'입니다. 제가 보여드릴 핵심은 "+core+
 "이고, 오늘 할 행동은 "+action+"입니다.\n\n"+
 "30초 — 공식 출처는 "+(S.src[0].o||"공식기관")+
-" 등의 자료에서 확인했고, 주의할 점은 "+S.caution+"입니다.";
+" 등의 자료에서 확인했고, 주의할 점은 "+S.finalCaution+"입니다.";
 }
 
 /* 화면 */
@@ -1892,14 +1901,6 @@ function scr7(){
 }
 
 function scr8(){
- if(!S.finalAud){
-  S.finalAud=S.aud;
- }
-
- if(!S.finalPurpose){
-  S.finalPurpose=S.purpose;
- }
-
  var h=
  '<h2><i>08</i>쉬운 문장 5원칙 → 한 장 5칸</h2>'+
  '<span class="tool">Gemini Notebook + 사람 · 8차시</span>'+
@@ -1911,50 +1912,65 @@ function scr8(){
  '<span>다음 행동</span>'+
  '</div>'+
  '<p class="hint">내용을 새로 만들지 않고 <b>뜻을 지키며 읽히게</b> 고칩니다.</p>'+
+ '<div class="rewriteIntro"><b>이 단계는 직접 써보는 활동입니다.</b><br>'+
+ 'AI 제안은 비교용으로만 보고, 아래에는 이전 단계에서 고른 문장을 보면서 내가 더 쉬운 표현으로 다시 씁니다. '+
+ '<b>출처는 자동으로 유지</b>되므로 다시 입력하지 않습니다.</div>'+
  block("Gemini Notebook · 쉬운 문장 다듬기",pEasy(),"long")+
 
- '<div class="fld"><label>AI 제안 <span class="note">선택 · 보관용</span></label>'+
+ '<div class="fld"><label>AI 제안 <span class="note">비교용 · 아래 정본에 자동 반영되지 않음</span></label>'+
  '<textarea id="easyDraft" rows="6">'+esc(S.easyDraft)+'</textarea></div>'+
 
- '<div class="canon"><h3>한 장 5칸 정본</h3>'+
+ '<div class="canon"><h3>한 장 5칸 정본 — 내가 직접 바꿔 쓰기</h3>'+
 
- '<div class="fld"><label>1. 제목·대상 — 행동형 제목</label>'+
- '<input type="text" id="finalTitle" value="'+esc(S.finalTitle)+'" placeholder="예: 집 안 세 곳부터 살펴봅시다"></div>'+
+ '<div class="studentwrite"><div class="fld"><label>1. 제목·대상 — 행동형 제목</label>'+
+ '<div class="refline"><b>제목을 만들 때 참고</b>\\n대상·생활장면: '+esc(S.aud)+'\\n목적: '+esc(S.purpose)+'</div>'+
+ '<input type="text" id="finalTitle" value="'+esc(S.finalTitle)+'" placeholder="예: 외출 전 세 가지만 확인해요"></div>'+
 
- '<div class="fld"><label>대상과 생활장면</label>'+
- '<textarea id="finalAud" rows="2">'+esc(S.finalAud)+'</textarea></div>'+
+ '<div class="fld"><label>대상과 생활장면 <span class="note">이전 내용을 짧고 쉽게 다시 씁니다</span></label>'+
+ '<div class="refline"><b>이전 내용</b>\\n'+esc(S.aud)+'</div>'+
+ '<textarea id="finalAud" rows="2" placeholder="누가, 언제 이 한 장을 보는지 짧게 적어보세요.">'+esc(S.finalAud)+'</textarea></div>'+
 
- '<div class="fld"><label>목적</label>'+
- '<textarea id="finalPurpose" rows="2">'+esc(S.finalPurpose)+'</textarea></div>';
+ '<div class="fld"><label>이 한 장의 목적</label>'+
+ '<div class="refline"><b>이전 내용</b>\\n'+esc(S.purpose)+'</div>'+
+ '<textarea id="finalPurpose" rows="2" placeholder="이 한 장을 보고 무엇을 확인하거나 할 수 있어야 하는지 적어보세요.">'+esc(S.finalPurpose)+'</textarea></div></div>';
 
  for(var i=0;i<3;i++){
-  h+='<div class="fld"><label>2. 꼭 확인할 것 '+(i+1)+'</label>'+
-  '<textarea data-core="'+i+'" rows="2">'+esc(S.core[i])+'</textarea></div>';
+  h+='<div class="studentwrite"><div class="fld"><label>2. 꼭 확인할 것 '+(i+1)+'</label>'+
+  '<div class="refline"><b>이전 문장</b>\\n'+esc(S.core[i])+'</div>'+
+  '<textarea data-finalcore="'+i+'" rows="2" placeholder="뜻은 유지하고 더 짧고 익숙한 말로 바꿔보세요.">'+esc(S.finalCore[i])+'</textarea></div></div>';
  }
 
  for(var a=0;a<3;a++){
-  h+='<div class="fld"><label>3. 오늘 해볼 일 '+(a+1)+
+  h+='<div class="studentwrite"><div class="fld"><label>3. 오늘 해볼 일 '+(a+1)+
   (a===2?' <span class="note">선택</span>':'')+
   '</label>'+
-  '<input type="text" data-action="'+a+'" value="'+esc(S.actions[a])+'">'+
-  '</div>';
+  '<div class="refline"><b>이전 문장</b>\\n'+esc(S.actions[a])+'</div>'+
+  '<input type="text" data-finalaction="'+a+'" value="'+esc(S.finalActions[a])+'" placeholder="오늘 바로 확인할 수 있는 한 행동으로 적어보세요.">'+
+  '</div></div>';
  }
 
- h+='<div class="fld"><label>4. 도움받을 곳</label>'+
- '<textarea id="help" rows="3">'+esc(S.help)+'</textarea></div>'+
+ h+='<div class="studentwrite"><div class="fld"><label>4. 도움받을 곳</label>'+
+ '<div class="refline"><b>이전 내용</b>\\n'+esc(S.help)+'</div>'+
+ '<textarea id="finalHelp" rows="3" placeholder="어디에 무엇을 물어볼지 쉽게 적어보세요.">'+esc(S.finalHelp)+'</textarea></div></div>'+
 
- '<div class="fld"><label>5. 주의</label>'+
- '<textarea id="caution" rows="2">'+esc(S.caution)+'</textarea></div>'+
+ '<div class="studentwrite"><div class="fld"><label>5. 주의</label>'+
+ '<div class="refline"><b>이전 내용</b>\\n'+esc(S.caution)+'</div>'+
+ '<textarea id="finalCaution" rows="2" placeholder="조건이나 주의가 빠지지 않게 짧게 적어보세요.">'+esc(S.finalCaution)+'</textarea></div></div>'+
 
- '<div class="fld"><label>5. 출처 <span class="note">자동으로 다음 단계에 포함됩니다</span></label>'+
+ '<div class="fld"><label>5. 출처 <span class="note">자동 유지 · 다시 입력하지 않습니다</span></label>'+
  '<textarea readonly rows="5">'+esc(sourceList())+'</textarea></div>'+
+
+ (S.question.trim()
+   ? '<div class="fld"><label>추가 확인 질문 <span class="note">이전 단계에서 가져옴 · 사실처럼 넣지 않음</span></label>'+
+     '<textarea readonly rows="2">'+esc(S.question)+'</textarea></div>'
+   : '')+
 
  '</div>'+
 
  checkOpt(
   "onepagefreeze",
   0,
-  "이 5칸을 8차시 인포그래픽 생성에 사용할 정본으로 확정합니다.",
+  "내가 다시 쓴 이 5칸을 8차시 인포그래픽 생성에 사용할 정본으로 확정합니다.",
   S.onePageFreeze
  );
 
@@ -2100,14 +2116,14 @@ function scr12(){
  var actionOpts="";
 
  for(var i=0;i<3;i++){
-  if(S.core[i] && S.core[i].trim()){
-   coreOpts+='<option value="'+i+'"'+(S.presentationCore===String(i)?' selected':'')+'>'+esc(S.core[i])+'</option>';
+  if(S.finalCore[i] && S.finalCore[i].trim()){
+   coreOpts+='<option value="'+i+'"'+(S.presentationCore===String(i)?' selected':'')+'>'+esc(S.finalCore[i])+'</option>';
   }
  }
 
  for(var j=0;j<3;j++){
-  if(S.actions[j] && S.actions[j].trim()){
-   actionOpts+='<option value="'+j+'"'+(S.presentationAction===String(j)?' selected':'')+'>'+esc(S.actions[j])+'</option>';
+  if(S.finalActions[j] && S.finalActions[j].trim()){
+   actionOpts+='<option value="'+j+'"'+(S.presentationAction===String(j)?' selected':'')+'>'+esc(S.finalActions[j])+'</option>';
   }
  }
 
@@ -2199,8 +2215,17 @@ function render(){
 
  $("panel").innerHTML=screens[step]();
  bind();
+}
 
- $("panel").scrollIntoView({block:"nearest"});
+function scrollStepTop(){
+ requestAnimationFrame(function(){
+  var root=$("wz");
+  if(root && root.scrollIntoView){
+   root.scrollIntoView({behavior:"auto",block:"start"});
+  }else{
+   window.scrollTo(0,0);
+  }
+ });
 }
 
 /* 입력 이벤트 */
@@ -2295,6 +2320,8 @@ function onInput(e){
  else if(id==="finalTitle")S.finalTitle=t.value;
  else if(id==="finalAud")S.finalAud=t.value;
  else if(id==="finalPurpose")S.finalPurpose=t.value;
+ else if(id==="finalHelp")S.finalHelp=t.value;
+ else if(id==="finalCaution")S.finalCaution=t.value;
 
  else if(id==="infographicLocation")S.infographicLocation=t.value;
  else if(id==="infographicFix")S.infographicFix=t.value;
@@ -2353,6 +2380,14 @@ function onInput(e){
  else if(t.dataset.card!==undefined){
   S.cards[+t.dataset.card]=t.value;
   updateSelectPrompt();
+ }
+
+ else if(t.dataset.finalcore!==undefined){
+  S.finalCore[+t.dataset.finalcore]=t.value;
+ }
+
+ else if(t.dataset.finalaction!==undefined){
+  S.finalActions[+t.dataset.finalaction]=t.value;
  }
 
  else if(t.dataset.core!==undefined){
@@ -2789,21 +2824,25 @@ function valid(){
 
  if(step===7){
   if(!S.finalTitle.trim() || !S.finalAud.trim() || !S.finalPurpose.trim()){
-   return "행동형 제목·대상·목적을 확인하세요.";
+   return "행동형 제목·대상·목적을 직접 작성하세요.";
   }
 
   for(var y=0;y<3;y++){
-   if(!S.core[y].trim()){
-    return "핵심정보 3개를 모두 확인하세요.";
+   if(!S.finalCore[y].trim()){
+    return "이전 문장을 참고해 핵심정보 3개를 쉬운 문장으로 직접 다시 써보세요.";
    }
   }
 
-  if(!S.actions[0].trim() || !S.actions[1].trim() || !S.help.trim() || !S.caution.trim()){
-   return "행동 2개 이상·도움받을 곳·주의를 확인하세요.";
+  if(!S.finalActions[0].trim() || !S.finalActions[1].trim()){
+   return "이전 행동을 참고해 오늘 해볼 일을 최소 2개 직접 다시 써보세요.";
+  }
+
+  if(!S.finalHelp.trim() || !S.finalCaution.trim()){
+   return "도움받을 곳과 주의 문장을 직접 다시 써보세요.";
   }
 
   if(!S.onePageFreeze){
-   return "한 장 5칸 정본 확정을 체크하세요.";
+   return "내가 다시 쓴 한 장 5칸을 정본으로 확정하세요.";
   }
 
   return "";
@@ -2896,6 +2935,7 @@ $("next").onclick=function(){
  if(step===LAST){
   step=0;
   render();
+  scrollStepTop();
   autoSaveNow();
   return;
  }
@@ -2909,6 +2949,7 @@ $("next").onclick=function(){
 
  step++;
  render();
+ scrollStepTop();
  autoSaveNow();
 };
 
@@ -2918,6 +2959,7 @@ $("prev").onclick=function(){
  if(step>0){
   step--;
   render();
+  scrollStepTop();
   autoSaveNow();
  }
 };
@@ -3064,6 +3106,7 @@ function applySavedPayload(payload){
  step=isNaN(savedStep) ? 0 : Math.max(0,Math.min(LAST,savedStep));
 
  render();
+ scrollStepTop();
  autoSaveNow();
  return true;
 }
@@ -3394,6 +3437,33 @@ function normalize(o){
  while(S.actions.length<3){
   S.actions.push("");
  }
+
+ /* v0.9 이전 백업 호환:
+    예전 버전에서 8차시 정본까지 확정했다면 그때의 core/actions/help/caution을
+    새 정본 필드로 옮겨 기존 작업을 잃지 않습니다. */
+ if(!Array.isArray(S.finalCore)){
+  S.finalCore=["","",""];
+ }
+ while(S.finalCore.length<3){
+  S.finalCore.push("");
+ }
+
+ if(!Array.isArray(S.finalActions)){
+  S.finalActions=["","",""];
+ }
+ while(S.finalActions.length<3){
+  S.finalActions.push("");
+ }
+
+ if(o.onePageFreeze && !Array.isArray(o.finalCore)){
+  S.finalCore=S.core.slice(0,3);
+  S.finalActions=S.actions.slice(0,3);
+  if(!S.finalHelp)S.finalHelp=S.help||"";
+  if(!S.finalCaution)S.finalCaution=S.caution||"";
+ }
+
+ if(!S.finalHelp)S.finalHelp="";
+ if(!S.finalCaution)S.finalCaution="";
 
  [
   ["topicChecks",3],

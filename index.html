@@ -1,4 +1,4 @@
-<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.12 | 06 저장호환 오류 + 07 실제 Gemini 출력 파싱 + 08 5칸 정리 -->
+<!-- AI 시민대학 스마트에이징 위저드 GitHub Pages v0.13 | 07 인라인 목록 분리 파서 보강 -->
 <div id="wz">
 <style>
 #wz *{box-sizing:border-box}
@@ -103,7 +103,7 @@
 <h1>스마트 에이징 안내자료 · AI 콘텐츠 위저드</h1>
 <p class="sub">ChatGPT로 공식자료를 찾고, 사람이 확인한 뒤, Gemini Notebook에서 6~10차시 흐름대로 검증·선별·제작·활용합니다.</p>
 
-<div class="versionTag" id="versionTag">v0.12</div>
+<div class="versionTag" id="versionTag">v0.13</div>
 <div class="rail" id="rail"></div>
 <div class="panel" id="panel"></div>
 <div class="err" id="err"></div>
@@ -143,7 +143,7 @@
 var CHATGPT_URL="https://chatgpt.com/";
 var NOTEBOOK_URL="https://notebooklm.google.com/";
 
-var WIZARD_VERSION="v0.12";
+var WIZARD_VERSION="v0.13";
 var STORAGE_KEY="ai_citizen_smart_aging_wizard_autosave_v2";
 var saveTimer=null;
 var storageAvailable=true;
@@ -1055,7 +1055,17 @@ function sectionByHeading(text,startRe,endRes){
 }
 
 function listItemsFromSection(section,max){
- var lines=String(section||"").replace(/\r\n?/g,"\n").split("\n");
+ var text=String(section||"").replace(/\r\n?/g,"\n");
+
+ /* Notebook/Gemini 결과가 화면에서는 여러 줄로 보여도 복사할 때
+    "1. ... 2. ... 3. ..." 또는 "- [ ] ... - [ ] ..."처럼 한 줄로
+    합쳐지는 경우가 있어 목록 표식을 기준으로 먼저 줄을 복원합니다. */
+ text=text
+  .replace(/[ \t]+(?=(?:[1-9]\d*)[.)][ \t]+)/g,"\n")
+  .replace(/[ \t]+(?=-[ \t]*\[[ xX]?\][ \t]+)/g,"\n")
+  .replace(/[ \t]+(?=-[ \t]+(?=(?:\*\*|__|[가-힣A-Za-z])))/g,"\n");
+
+ var lines=text.split("\n");
  var out=[];
  var cur="";
 
@@ -1077,22 +1087,27 @@ function listItemsFromSection(section,max){
   if(!line || /^---+$/.test(line))continue;
   if(/^#{1,6}\s+/.test(line))continue;
 
-  var m=line.match(/^\s*(?:[-•]\s*)?(?:\[\s*[xX]?\s*\]\s*)?(?:\d+[.)]\s+)?(.+)$/);
-  if(!m)continue;
+  var numbered=line.match(/^\s*(\d+)[.)]\s+(.+)$/);
+  var checkbox=line.match(/^\s*[-•]\s*\[\s*[xX]?\s*\]\s*(.+)$/);
+  var bullet=line.match(/^\s*[-•]\s+(.+)$/);
 
-  var explicit=
-   /^\s*(?:\d+[.)]\s+|[-•]\s+\[\s*[xX]?\s*\]|[-•]\s+)/.test(line);
-
-  if(explicit){
+  if(numbered || checkbox || bullet){
    if(cur)push();
-   cur=m[1];
-  }else if(cur){
-   cur+=" "+m[1];
-  }else{
-   cur=m[1];
+
+   if(numbered)cur=numbered[2];
+   else if(checkbox)cur=checkbox[1];
+   else cur=bullet[1];
+
+   if(out.length>=max)break;
+   continue;
   }
 
-  if(out.length>=max)break;
+  /* 목록 항목의 줄바꿈으로 이어진 설명은 같은 항목에 붙입니다. */
+  if(cur){
+   cur+=" "+line;
+  }else{
+   cur=line;
+  }
  }
 
  if(cur && out.length<max)push();
@@ -1239,6 +1254,15 @@ function parseSelectResult(raw){
  if(caution)found++;
  if(S.holdItem && S.holdReason)found++;
  if(question)found++;
+
+ parseSelectResult.lastCounts={
+  core:core.length,
+  actions:actions.length,
+  help:help?1:0,
+  caution:caution?1:0,
+  hold:(S.holdItem && S.holdReason)?1:0,
+  question:question?1:0
+ };
 
  return found;
 }
@@ -2624,8 +2648,9 @@ function onInput(e){
 
   var ss=$("selectParseStatus");
   if(ss){
+   var pc=parseSelectResult.lastCounts||{};
    ss.innerHTML=S.selectResult.trim()
-    ? "자동 인식 결과: <strong>"+parsed+"/6 영역</strong> · 아래 칸을 눈으로 확인하세요."
+    ? "자동 인식: <strong>핵심 "+(pc.core||0)+"/3 · 행동 "+(pc.actions||0)+"/3</strong> · 나머지 "+parsed+"/6 영역 확인"
     : "Gemini 결과를 붙여넣으면 핵심정보·행동·도움·주의·보류/제외·추가질문을 자동으로 읽습니다.";
   }
  }
